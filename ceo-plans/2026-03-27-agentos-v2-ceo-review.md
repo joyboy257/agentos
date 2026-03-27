@@ -56,16 +56,28 @@ AgentOS becomes the control plane for AI agent infrastructure — not just a con
 
 **RECOMMENDATION:** Choose APPROACH A — the graph is load-bearing for the platform thesis. Without visible capability edges, the Discovery Panel is just a list and the Registry flywheel has no foundation.
 
-## Scope Decisions (cherry-pick ceremony — TBD)
+## Scope Decisions (cherry-pick ceremony — COMPLETED)
 
 | # | Proposal | Effort | Decision | Reasoning |
 |---|----------|--------|----------|-----------|
-| 1 | Capability Graph in Tools section (not canvas) | L | PENDING | Core differentiator — in scope |
-| 2 | Discovery Panel always-on right sidebar | L | PENDING | Moat — in scope |
-| 3 | List/Graph toggle | S | PENDING | Simplicity — in scope |
+| 1 | Capability Graph in Tools section (not canvas) | L | ACCEPTED | Core differentiator — in scope |
+| 2 | Discovery Panel always-on right sidebar | L | ACCEPTED | Moat — in scope |
+| 3 | List/Graph toggle | S | ACCEPTED | Simplicity — in scope |
 | 4 | Fleet capability overview (v2) | XL | DEFERRED | Requires team workspaces |
-| 5 | Animation on tool add/remove | M | PENDING | No in v1 per design doc decision |
+| 5 | Animation on tool add/remove | M | DEFERRED | No in v1 per design doc decision |
 | 6 | Community-contributed Registry (v1.2) | XL | DEFERRED | Platform phase 2 |
+
+### Cherry-Pick Results (SELECTIVE EXPANSION — all 7 accepted)
+
+| # | Expansion | Effort | Decision |
+|---|-----------|--------|----------|
+| 1 | Pre-indexed capability lookup (Map-based) | S | ACCEPTED |
+| 2 | Schema validation on capability DB load | S | ACCEPTED |
+| 3 | Analytics event schema in design doc | S | ACCEPTED |
+| 4 | First-run example agent pre-loaded | S | ACCEPTED |
+| 5 | Concurrent health checks (Promise.all) | S | ACCEPTED |
+| 6 | Tool picker confirm-with-0 = cancel | S | ACCEPTED |
+| 7 | Pure function for capability state machine | S | ACCEPTED |
 
 ## Accepted Scope
 
