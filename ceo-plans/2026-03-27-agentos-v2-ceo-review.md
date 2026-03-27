@@ -117,6 +117,43 @@ AgentOS becomes the control plane for AI agent infrastructure — not just a con
 - Enterprise GTM motion
 - MCP protocol R&D
 
+## Tech Stack (pinned)
+
+- **Framework:** React 18 + TypeScript
+- **Bundler:** Vite
+- **State:** Zustand (uiStore, agentConfigStore)
+- **Storage:** IndexedDB via Dexie.js
+- **Graph rendering:** Hand-rolled SVG (no force-directed library, auto-layout only)
+- **Export:** js-yaml for YAML generation
+- **Testing:** Vitest + Playwright (E2E)
+- **v1:** Static CDN deploy, no backend, no auth, local-first
+
+## CI/CD Pipeline
+
+```yaml
+# .github/workflows/deploy.yml
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: bun-version: latest
+      - run: bun install
+      - run: bun run build
+      - run: bun test
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+```
+
+Every merge to main: install → build → test → deploy. Zero manual steps.
+
 ## NOT in Scope (explicitly rejected)
 
 - LinkedIn for agents (killed: 5 missing prerequisites, 2028+)
