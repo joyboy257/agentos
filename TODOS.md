@@ -1,12 +1,15 @@
 # AgentOS TODOs
 
-## Context: Product Change
+## Context: v3 Planning — Clean Slate
 
-Updated on 2026-03-28 following CEO review:
-- **Mission:** Democratize multi-agent AI — anyone can build an AI agent team visually, without code. Not just developers.
-- **Primary persona:** Non-technical power users (marketing managers, ops leads, small business owners) who use ChatGPT but have never built a multi-agent workflow. Secondary: indie hackers building AI products.
-- **Competitive position:** Cling Kanban is building the same three pillars (Canvas + Runtime + Orchestrator) for developers. AgentOS wins on audience (non-technical users) and business-process niche.
-- **Views are flexible:** Kanban, node workflow, and other views are all candidates — user testing decides which view mode resonates.
+Updated on 2026-03-28:
+- **Status:** All v2 docs archived to `docs/archived/v2/` — AgentOS v3 is being reimagined from scratch
+- **What happened:** v2 had 11 unresolved gaps (see archived docs). User chose clean slate over incremental fixes.
+- **Starting point:** Cling Kanban validates the three pillars (Canvas + Runtime + Orchestrator) for developers. AgentOS's uncrowded wedge: non-technical users + business processes + UI/UX taste + persistence + multi-view canvas + desktop-first.
+- **Mission anchor:** "How can a marketing manager put together a Google Ads agent team quickly, and visually, without having to really code?"
+- **Competitive reality:** Cling has the same three pillars. AgentOS must win on audience (non-technical users who manage teams, not developers who build agents) and business-process niche. UI/UX taste and ease-of-use are the secret sauce.
+
+**TODOs T1-T7 remain valid** — they are Electron/implementation-level concerns that apply regardless of which phase/timeframe we target. They are retained as the engineering backlog for when v3 architecture is specced.
 
 ---
 

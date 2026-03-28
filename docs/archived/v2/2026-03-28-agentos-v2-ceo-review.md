@@ -208,7 +208,7 @@ The CEO review of the AgentOS Electron design is complete.
 2. v0.1 success metric: Task completion (end-to-end agent run without manual intervention)
 3. Persona: Non-technical power users (marketing managers, ops leads) as primary; indie hackers secondary
 
-**Mission (locked in):** Democratize multi-agent AI — anyone can build an agent team visually, without code. Not just developers. The masses use ChatGPT. AgentOS brings multi-agent orchestration to people who have never touched a terminal.
+**Mission Statement (locked in):** Most people will never write a line of code. But every marketing manager, ops lead, and small business owner already knows what it feels like to wish you had more hands. AgentOS gives them a canvas — not a command line — where they can build a team of AI agents, watch those agents work, and trust that someone is keeping an eye on what goes wrong. We are not building another developer tool. We are building the tool that makes multi-agent AI feel inevitable for the person who manages a team, not the person who builds one. The IDE for everyone else.
 
 **Scope decisions:**
 - Expanded: Claude Code plugin added to Phase 1 as distribution channel
