@@ -318,3 +318,272 @@ This means the orchestrator is useful from Day 1 even without manual configurati
 | Orchestrator UX too complex for beginners | High | Medium | "Watch and learn" mode provides value without manual config |
 | XL scope causes project stall | Medium | Critical | Staged exit criteria per phase; clear kill conditions |
 | MCP ecosystem fragmentation | Low | Medium | Stick to MCP SDK; don't build custom protocol adapters |
+
+---
+
+## Engineering Review — Phase 0: Runtime Validation Sprint
+
+**Status: RESOLVED** — added per plan-eng-review findings.
+
+### Blocking Issues Found and Resolved
+
+1. **IPC streaming architecture** — Resolved: `UtilityProcess.fork()` + MessagePort per agent. Each agent process gets a MessagePort back to the renderer for stdout streaming. Main process acts as router — renderer never directly subscribes to agent stdio.
+
+2. **React 19 → React 18.3** — Resolved: Pin to React 18.3 (latest stable). React 19 is not released. All stack libraries (React Flow, xterm.js, Zustand) support 18.x.
+
+3. **Scaffolding tool** — Resolved: Use `electron-vite` (`npm create electron-vite` with React + TypeScript template). Vite-powered HMR for both main and renderer processes. Integrates with electron-builder for packaging.
+
+4. **Runtime-before-canvas sequencing** — Resolved: Add **Phase 0 (Runtime Validation Sprint, 1-2 weeks)** before v0.1 canvas work. Prove PTY + agent spawn + stdout streaming in isolation. This catches: PTY semantics gap, SQLite event-loop blocking, log backpressure, and IPC streaming correctness before building UI on top.
+
+### Phase 0: Runtime Validation Sprint (NEW — pre-v0.1)
+
+**Goal:** Ship a running agent process visible in an xterm.js terminal tab. No canvas yet.
+
+**Deliverables:**
+- Electron shell: app launches, window appears, preload IPC works
+- Agent spawn: `UtilityProcess.fork()` creates a Node.js agent process
+- PTY support: `node-pty` integrated with xterm.js for real terminal emulation (not plain stdio)
+- Stdout streaming: Agent process stdout streams through main process → MessagePort → xterm.js terminal
+- SQLite logging: Agent events (start, tool call, handoff, end) written to better-sqlite3
+- MCP integration: Agent process connects to one MCP server (filesystem) via stdio
+
+**Exit criterion:** A single agent can be spawned, its stdout shows in an xterm.js tab, and its events are persisted to SQLite. No canvas.
+
+**Why PTY matters (node-pty):** Plain stdio pipes don't provide terminal semantics (terminal resize, ANSI escape codes, interactive input). `node-pty` wraps libuv/libpty for full PTY support. Required for agents that run interactive shells.
+
+### Post-Resolution Risk Register (updated)
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Electron install-heavy vs. browser-first | Medium | Medium | Dev tools audience accepts desktop apps |
+| v0.1 canvas doesn't convert tmux users | Medium | High | Kill condition: <3 agents/canvas in week 1 → revisit UX |
+| Orchestrator UX too complex for beginners | High | Medium | "Watch and learn" mode provides value without config |
+| XL scope causes project stall | Medium | Critical | Staged exit criteria per phase; clear kill conditions |
+| MCP ecosystem fragmentation | Low | Medium | Stick to MCP SDK; don't build custom protocol adapters |
+| Phase 0 runtime not proven before canvas | High | Critical | **Added Phase 0 runtime sprint** |
+| SQLite sync writes block event loop | Medium | Medium | Offload trace writes to batched flush on idle |
+| Log backpressure / memory blowup | Medium | Medium | Circular buffer in renderer, backpressure via MessagePort |
+
+---
+
+## Engineering Review — Phase 1: Canvas (v0.1)
+
+### Architecture
+
+```
+src/
+├── main/
+│   ├── index.ts              # app entry, BrowserWindow, app.enableSandbox()
+│   ├── preload.ts            # contextBridge.exposeInMainWorld('electronAPI', {...})
+│   ├── ipc/
+│   │   ├── channels.ts       # AgentChannel enum (typed IPC channel names)
+│   │   └── handlers.ts       # ipcMain.handle() for each channel
+│   └── agent/
+│       └── processSupervisor.ts  # UtilityProcess.fork(), MessagePort, registry
+├── preload/
+│   └── index.ts              # preload script entry (contextBridge)
+└── renderer/
+    ├── App.tsx               # Root: ReactFlow canvas + tabbed terminal panel
+    ├── components/
+    │   ├── Canvas/
+    │   │   ├── CanvasView.tsx     # ReactFlow wrapper
+    │   │   ├── AgentNode.tsx       # Custom node (status badge, tool list)
+    │   │   └── CanvasEdge.tsx     # Custom edge (handoff, capability)
+    │   ├── Terminal/
+    │   │   └── TerminalTab.tsx    # xterm.js + FitAddon + MessagePort reader
+    │   └── Orchestrator/
+    │       └── OrchestratorPanel.tsx  # Alert feed, policy cards (display only in v0.1)
+    └── stores/
+        ├── canvasStore.ts    # Zustand: nodes, edges, viewport
+        └── agentStore.ts     # Zustand: agents, MCP connections
+```
+
+### Key Engineering Decisions (v0.1)
+
+1. **electron-vite** for build/HMR — fast iteration, Vite for renderer, esbuild for main
+2. **React Flow v11** (`@xyflow/react`) — nodes/edges state via `useNodesState`/`useEdgesState`
+3. **xterm.js** (`@xterm/xterm` + `@xterm/addon-fit`) — ResizeObserver for auto-fit
+4. **Zustand** — single store per domain, no cross-store subscriptions in v0.1
+5. **MessagePort streaming** — Each `TerminalTab` subscribes to its agent's MessagePort. Main process routes.
+6. **node-pty** — PTY for real terminal emulation (Phase 0 deliverable, required for v0.1)
+
+### What Already Exists
+- None. Source code does not exist. Start from `npm create electron-vite`.
+
+---
+
+## Engineering Review — Phase 2: Runtime (v0.2)
+
+### Architecture
+
+Additional components:
+```
+src/main/
+├── db/
+│   └── agentStore.ts   # better-sqlite3: agent events, state, reasoning traces
+└── agent/
+    ├── mcpClient.ts    # MCP SDK: spawns MCP server processes, stdio communication
+    └── reasoningLoop.ts # Per-agent reasoning loop (streams via MessagePort)
+```
+
+### Key Engineering Decisions (v0.2)
+
+1. **better-sqlite3** — Sync calls in main process only. Never call SQLite from renderer. IPC for all queries.
+2. **MCP SDK** — `@modelcontextprotocol/sdk` for MCP client. One stdio connection per MCP server.
+3. **Trace batching** — Trace writes batched to 500 entries or 5s interval, flushed on idle.
+4. **Process persistence** — Agent state serialized to SQLite on every state change. Respawn from last state on restart.
+
+---
+
+## Engineering Review — Phase 3: Orchestrator (v1.0)
+
+### Architecture
+
+Additional components:
+```
+src/main/orchestrator/
+├── policyEngine.ts    # Evaluates Policy triggers against agent event stream
+├── watchAndLearn.ts   # Observes 24-72h, generates natural-language policy suggestions
+└── approvalGate.ts   # Pauses agent, waits for human approve/reject via IPC
+```
+
+### Key Engineering Decisions (v1.0)
+
+1. **Policy engine** — Runs as microtask on each agent event. Non-blocking.
+2. **Watch-and-learn** — Time-series DB (SQLite extension or separate file) stores event durations. On observation complete, runs simple statistical thresholds → natural-language suggestion via LLM call.
+3. **Capability edge auto-draw** — On agent tool change, `capabilityLookup(selectedToolIds)` → finds matching `Capability` entries → React Flow edges added.
+
+---
+
+## Test Coverage Plan
+
+**Full test plan:** `~/.gstack/projects/joyboy257-agentos/deon-main-eng-review-test-plan-20260328-132824.md`
+
+### Phase 0 Tests (Runtime Validation Sprint)
+
+```
+CODE PATH COVERAGE
+===========================
+[+] src/main/agent/processSupervisor.ts
+    ├── [GAP] spawn() → UtilityProcess created + MessagePort returned
+    ├── [GAP] terminate() → process killed + registry cleaned
+    ├── [GAP] onExit callback → fired when process exits
+    └── [GAP] list() → returns {agentId, pid, status}[]
+
+[+] src/main/agent/nodePty.ts
+    ├── [GAP] spawn PTY with node-pty
+    ├── [GAP] resize() → cols/rows updated
+    ├── [GAP] onData callback → streams to MessagePort
+    └── [GAP] onExit callback
+
+[+] src/main/ipc/channels.ts
+    ├── [GAP] Typed channel enum covers all IPC messages
+    └── [GAP] Handler registration for each channel
+
+[+] src/preload/index.ts
+    ├── [GAP] contextBridge exposes typed API (no 'any')
+    └── [GAP] invoke/send/on typed correctly
+
+USER FLOW COVERAGE
+===========================
+[+] Agent spawn in isolation
+    ├── [GAP] Agent process starts → PTY created → xterm.js shows output
+    └── [GAP] Agent exits → PTY closed → terminal shows "process ended"
+
+[+] MCP server connection
+    ├── [GAP] Agent connects to filesystem MCP server via stdio
+    └── [GAP] Tool call executes → result streamed to terminal
+
+[+] SQLite persistence
+    ├── [GAP] Agent start event → written to SQLite
+    ├── [GAP] Agent complete event → written to SQLite
+    └── [GAP] On restart → agent state restored from SQLite
+```
+
+### Phase 1 Tests (Canvas v0.1)
+
+```
+CODE PATH COVERAGE
+===========================
+[+] src/renderer/stores/canvasStore.ts
+    ├── [GAP] addNode() → node added to state
+    ├── [GAP] removeNode(id) → node + connected edges removed
+    ├── [GAP] updateNodePosition(id, pos) → position updated
+    └── [GAP] addEdge() → edge added
+
+[+] src/renderer/stores/agentStore.ts
+    ├── [GAP] createAgent(name, role) → agent created with idle status
+    ├── [GAP] updateAgentStatus(id, status) → status updated
+    └── [GAP] deleteAgent(id) → agent + processes terminated
+
+[+] src/renderer/components/Canvas/AgentNode.tsx
+    ├── [GAP] renders with correct status badge color (idle=gray, running=green, error=red)
+    ├── [GAP] renders tool list (empty vs populated)
+    └── [GAP] onClick fires callback
+
+[+] src/renderer/components/Terminal/TerminalTab.tsx
+    ├── [GAP] xterm.js initialized with FitAddon
+    ├── [GAP] FitAddon.fit() called on mount + ResizeObserver
+    └── [GAP] MessagePort data → terminal.write()
+
+[+] src/renderer/components/Canvas/CanvasView.tsx
+    ├── [GAP] React Flow renders with MiniMap + Controls
+    └── [GAP] fitView on initial load
+
+USER FLOW COVERAGE
+===========================
+[+] Canvas add-and-connect flow
+    ├── [GAP] Add 3 agents → all 3 visible
+    ├── [GAP] Connect A→B, B→C → edges appear
+    └── [GAP] Delete agent with edge → edge removed
+
+[+] Terminal tab flow
+    ├── [GAP] Open terminal for agent → tab appears
+    ├── [GAP] Switch between tabs → correct terminal shown
+    └── [GAP] Close tab → tab removed, process not killed
+
+[+] Empty state
+    ├── [GAP] Fresh app → empty canvas with "Add your first agent" prompt
+
+E2E (Playwright)
+===========================
+[+] tests/e2e/smoke.spec.ts
+    ├── [GAP] App launches without crash
+    ├── [GAP] Canvas renders with empty state
+    └── [GAP] Adding first agent works
+
+[+] tests/e2e/canvas.spec.ts
+    ├── [GAP] 3 agents + 2 handoff edges → all render correctly
+    ├── [GAP] Minimap click → viewport jumps
+    └── [GAP] Terminal tab switching → correct tab active
+```
+
+---
+
+## Open Engineering Questions (post-review)
+
+1. **Watch-and-learn eval criteria** — What threshold defines a "pattern" worth surfacing? (Standard deviation? Absolute time? Error rate?) Need statistical spec before Phase 3.
+
+2. **Capability DB seeding** — 30+ entries needed at launch. Who owns content curation? What tool taxonomy? T1 (matching algorithm) and T3 (auto-layout) must be specced before Phase 3 can build capability edges.
+
+3. **Agent restart state machine** — On crash: retry immediately? Backoff? Max retries per session? The design says "watchdog: restart crashed agents" but the restart policy (exponential backoff, max attempts, notify before restart) is unspecced.
+
+4. **Crash recovery** — If the app crashes mid-agent-run, what happens? Agent processes may orphan. Need: restart recovery procedure, orphan process cleanup on boot.
+
+---
+
+## NOT in Scope
+
+The following were considered and explicitly deferred:
+
+- **Multiplayer collaboration / canvas sharing** — v2
+- **Cloud deployment option** — v2
+- **Team workspaces + RBAC** — v2
+- **Agent marketplace** — v2
+- **Claude Code plugin integration** — Future phase (post-v1.0), blocked on Claude Code plugin API changes
+- **Shared knowledge graph** — Deferred to v1.1 (per-agent isolated memory is v1.0)
+- **Fleet overview mode (50+ agents)** — Deferred to v1.1 (React Flow group feature)
+- **Fuzzy/semantic capability matching** — Exact set matching is v1.0 spec; semantic matching is v2 R&D
+- **Export to Claude Code YAML / OpenAI JSON** — Deferred to v1.1
+- **Compliance attestation, Enterprise RBAC + audit logs** — v2
+- **Automated rollback CI/CD** — Manual procedure only (P2/T2)
