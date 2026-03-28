@@ -2,10 +2,11 @@
 
 ## Context: Product Change
 
-The TODOs below were updated on 2026-03-28 following a product pivot:
-- **Old product:** Config Studio (browser-based agent config tool with Discovery Panel)
-- **New product:** AgentOS Electron IDE (desktop app: visual canvas + integrated terminal runtime + Orchestrator)
-- **Old TODOs:** T1-T4 from the Config Studio eng review are being updated for the Electron product
+Updated on 2026-03-28 following CEO review:
+- **Mission:** Democratize multi-agent AI — anyone can build an AI agent team visually, without code. Not just developers.
+- **Primary persona:** Non-technical power users (marketing managers, ops leads, small business owners) who use ChatGPT but have never built a multi-agent workflow. Secondary: indie hackers building AI products.
+- **Competitive position:** Cling Kanban is building the same three pillars (Canvas + Runtime + Orchestrator) for developers. AgentOS wins on audience (non-technical users) and business-process niche.
+- **Views are flexible:** Kanban, node workflow, and other views are all candidates — user testing decides which view mode resonates.
 
 ---
 
