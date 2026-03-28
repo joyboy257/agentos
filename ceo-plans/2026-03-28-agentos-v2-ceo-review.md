@@ -10,17 +10,18 @@ Branch: main | Repo: joyboy257/agentos (https://github.com/joyboy257/agentos)
 ## Vision
 
 ### 10x Check
-AgentOS becomes the persistent control plane for AI agent infrastructure — not a config tool but the environment where agents actually run. The IDE metaphor earns its keep when the alternative is tmux grids and scroll-blind terminal output. Every agent spawned in AgentOS leaves a trace; every handoff is visible; every failure is caught by the Orchestrator before it cascades. The compounding moat is runtime lock-in: once agents run in AgentOS, their workflows, memory, and policies live there.
+AgentOS becomes the environment where anyone — not just developers — can harness multi-agent AI systems. The IDE metaphor earns its keep when the alternative is watching a ChatGPT tab and hoping it does the right thing. A marketing manager can assemble a "Google Ads optimization team" — a research agent, a copywriter agent, a budget allocator agent — on a visual canvas, connect them with handoffs, and watch them work. No code. No terminal. No tmux grids. Every agent leaves a trace; every handoff is visible; every failure is caught by the Orchestrator. The secret sauce is the UI/UX taste and ease-of-use that makes non-technical people feel empowered, not overwhelmed. The view mode (Kanban, node workflow, etc.) adapts to their mental model. The compounding moat is runtime lock-in: once agents run in AgentOS, their workflows, memory, and policies live there.
 
 ### Dream State Mapping
 ```
-  CURRENT STATE                      THIS PLAN                         12-MONTH IDEAL
-  ───────────────────────────────    ─────────────────────────────────  ─────────────────────────────────
-  tmux grids + scroll               Electron app: canvas + runtime       AgentOS as standard env for AI devs
-  Claude Code (solo, terminal)      Multi-agent canvas + Orchestrator    Team workspaces + fleet overview
-  Agents: invisible, ephemeral      Agents: visible, persistent         Agents: observable, recoverable
-  No orchestration                  Watch-and-learn policy engine       Watch-and-learn evolves → Predictive (Phase 3+)
-  No revenue model                   Freemium: solo free, team paid      Per-seat or usage-based revenue
+  CURRENT STATE                           THIS PLAN                            12-MONTH IDEAL
+  ───────────────────────────────────     ───────────────────────────────────  ─────────────────────────────────
+  tmux grids + scroll                    Electron app: canvas + runtime       AgentOS as standard env for AI ops
+  Claude Code (solo, terminal)           Multi-agent canvas + Orchestrator    Non-technical users building agent teams
+  Agents: invisible, ephemeral           Agents: visible, persistent          Agents: observable, recoverable
+  No orchestration                       Watch-and-learn policy engine         Predictive failure prevention
+  No revenue model                        Freemium: solo free, pro paid        Per-seat or usage-based revenue
+  ChatGPT users (solo, chat-only)       Visual multi-agent canvas             Anyone can assemble an agent team visually
 ```
 
 ---
@@ -100,7 +101,7 @@ AgentOS becomes the persistent control plane for AI agent infrastructure — not
 | Revenue model | HIGH | **RESOLVED:** Freemium: Solo free / Pro $20/seat/month. Solo devs get canvas + runtime free. Pro tier (1-5 seats) pays $20/seat/month. Team features (shared workspaces, fleet overview) are v2 — pricing is set ahead of that launch. |
 | MCP integration complexity | HIGH | **RESOLVED:** Phase 0 validates MCP using the **filesystem MCP server** as the reference implementation (stdio stdio handshake, server lifecycle, tool schema). Week 1: MCP SDK validation. Week 1.5: custom JSON-RPC fallback if Week 1 fails. Escalate by end of Week 2 if both fail. |
 | v0.1 success metric is wrong | HIGH | **RESOLVED:** Kill condition: "agent completes a task from handoff start to finish without manual intervention." Canvas engagement (≥3 agents, ≥1 edge) is a leading indicator only. |
-| Persona is category-level, not name-level | MEDIUM | **RESOLVED:** Target persona = solo indie hackers building AI products (no co-founder). They use Claude Code/Cursor, run 3-5 agents for research/coding/deployment, and can't see what their agents are doing together. |
+| Persona is category-level, not name-level | MEDIUM | **RESOLVED:** Target persona = non-technical power users: marketing managers, ops leads, small business owners who use ChatGPT but have never built a multi-agent workflow. They can reason about "a team that handles my Google Ads" without knowing what a terminal is. Secondary: indie hackers building AI products (Phase 1 onwards). |
 
 ---
 
@@ -122,7 +123,11 @@ AgentOS becomes the persistent control plane for AI agent infrastructure — not
 
 **Is this the right person to build it?** Partially — the solo engineer has a massive scope (Electron + React + MCP + PTY + SQLite + canvas). The Phase 0 runtime sprint is the right first proof-of-concept. If it takes longer than 2 weeks, the scope risk is real.
 
-**Primary positioning:** "It runs your AI agents and shows you what they're thinking — every tool call, every handoff, every failure — in one window." Core: "Multi-agent canvas — see all your AI agents on one canvas, connect them, watch them work."
+**Primary positioning:** "Build your own AI agent team — visually, without code." Supporting: "Connect agents on a canvas, watch them work, let the Orchestrator catch failures before they cascade."
+
+**Mission (locked in):** Democratize multi-agent AI for the uninitiated. The masses use ChatGPT. A small slice runs multi-agent systems with tmux grids. AgentOS brings multi-agent orchestration to the marketing manager who has never written a line of code but manages a team that could be 10x more productive with AI agents running their workflows.
+
+**Views are the UI layer.** The right view is not yet known — Kanban, node workflows, and others each serve different mental models. Phase 1 should prototype at least two view modes and test with users. The Runtime + Orchestrator underneath is what makes any view compelling. This is the secret sauce — not which view wins, but that the underlying system makes all views come alive.
 
 **Phase Timeline:**
 | Phase | Estimated Duration | Notes |
@@ -147,7 +152,7 @@ AgentOS becomes the persistent control plane for AI agent infrastructure — not
 | Phase 0: Runtime validation sprint (1-2 weeks before canvas) | S | **ACCEPTED — added by eng review** |
 | Phase 0 Definition of Done: Run `npm test`, confirm: (1) agent process starts via UtilityProcess.fork(), (2) stdout appears in xterm.js within 2s, (3) spawn/run/error events appear in SQLite within 1s | — | **ACCEPTED** |
 | Phase 0 Go/No-Go: If MCP SDK (filesystem server via stdio) validates in Week 1 → proceed to Phase 1. If MCP fails → try custom JSON-RPC stdio framing in Week 1.5. If both fail by end of Week 2 → escalate: reconsider Electron architecture before committing to Phase 1 | — | **ACCEPTED** |
-| Phase 1: Canvas MVP (React Flow + xterm.js, no runtime) | M | ACCEPTED |
+| Phase 1: Canvas MVP — multiple view modes (Kanban, node workflow, adaptive) | M | **ACCEPTED** — prototype ≥2 view modes, test with users to find right fit |
 | Phase 2: Full runtime (UtilityProcess + MCP + SQLite) | L | ACCEPTED |
 | Phase 3: Orchestrator (policy engine + watch-and-learn) | XL | ACCEPTED — scope: event ingestion, pattern observation, manual policy suggestions. NO automatic enforcement, NO policy rollback, NO multi-agent transactions |
 | Electron signing (sideloading v0.1, Mac App Store v1.0) | S | ACCEPTED |
@@ -183,36 +188,40 @@ AgentOS becomes the persistent control plane for AI agent infrastructure — not
 
 ## Competitive Landscape
 
-**Cling Kanban** (announced 2026-03) is the most direct competitor — a browser-based Kanban board for orchestrating coding agents using git worktrees. Validates the core pain: "20 terminal windows open." Target: developers running Cline/Claude Code/Codex in parallel. Limitation: coding-only, session-based, git worktree isolation.
+**Cling Kanban** (announced 2026-03) is the most direct competitor — same scope as AgentOS: Canvas + Runtime + Orchestrator. Browser-based Kanban board for coding agents using git worktrees. Cling started as a VS Code extension (like Kilo Code) — developer-first, coding-agent niche.
 
-**Implications for AgentOS:**
-- The demand is real — multiple products independently converging on the same problem
-- AgentOS's wedge vs Cling: real-world business agents (sales, ops) vs coding agents
-- Not browser-based: native Electron gives full process control, not just terminal tabs
-- MCP-native: connects to business-relevant servers (filesystem, github, memory, not just code)
-- Persistent agents: memory and state survive sessions, unlike Cling's ephemeral worktrees
-- Canvas + Orchestrator + Runtime: all three pillars, where Cling has only the orchestration layer
+**Assessment:** Cling validates. They are building the same three pillars. The coding-agent space is their home turf. AgentOS's differentiator is the **uninitiated** — the marketing managers, ops leads, and business owners who use ChatGPT but have never heard of multi-agent orchestration. The mission is: let a non-technical person assemble a "Google Ads agent team" visually in minutes, without writing code.
 
-**Assessment:** Cling validates. AgentOS is differentiated by scope (business agents, not coding), persistence (memory survives sessions), and breadth (all three pillars). The coding-agent niche is contested — AgentOS should own the business-agent niche.
+**Views are an open question.** Three viable canvas views exist — Kanban boards (Cling), n8n-style node workflows, and others. Each has different cognitive affordances for different user mental models. The right view may differ by persona or use case. AgentOS should support multiple view modes and let user testing reveal which sticks. The secret sauce is not which view wins — it's the Runtime + Orchestrator underneath that makes any view come alive.
+
+**AgentOS's structural advantages vs Cling:**
+- Native Electron: full process control, no browser sandbox limitations
+- MCP-native: connects to any MCP server (business-relevant tools, not just code)
+- Persistent agents: memory and state survive sessions (Cling is session-based)
+- Multi-view canvas: adaptive to user mental model, not forced into one paradigm
+- Desktop-first: no cloud dependency, works offline, full local data control
 
 The CEO review of the AgentOS Electron design is complete.
 
 **3 blocking decisions resolved:**
 1. Revenue model: Freemium Solo free / Pro $20/seat/month (Pro tier until team features ship in v2)
 2. v0.1 success metric: Task completion (end-to-end agent run without manual intervention)
-3. Persona: Solo indie hackers building AI products
+3. Persona: Non-technical power users (marketing managers, ops leads) as primary; indie hackers secondary
+
+**Mission (locked in):** Democratize multi-agent AI — anyone can build an agent team visually, without code. Not just developers. The masses use ChatGPT. AgentOS brings multi-agent orchestration to people who have never touched a terminal.
 
 **Scope decisions:**
 - Expanded: Claude Code plugin added to Phase 1 as distribution channel
 - Expanded: Phase 0 runtime validation sprint (2 weeks) before canvas work
+- Expanded: Multiple view modes (Kanban, node workflow) — test with users to find right fit
 - Deferred: Team workspaces → v2; team pricing tier → v2
 - Resolved: T7 added (watch-and-learn false-positive budget specced before Phase 3)
 
 **What was rejected:**
-- "VS Code for agents" positioning → replaced with canvas + "watch them work"
-- Team pricing before team features exist
+- "VS Code for agents" positioning → replaced with "build your own AI agent team visually"
+- Single view mode locked in early → views remain flexible until user testing decides
 
-**Competitive position:** Cling Kanban validates the "20 terminal windows" demand. AgentOS is differentiated by scope (business agents vs coding agents), persistence (memory survives sessions), and three-pillar completeness (Cling only has orchestration layer).
+**Competitive position:** Cling validates. They are building the same three pillars (Canvas + Runtime + Orchestrator) for developers. AgentOS's uncrowded wedge is the non-technical user and the business-process niche. The secret sauce is UI/UX taste + ease-of-use.
 
 **Next concrete step:** Phase 0 runtime sprint — spawn one agent, stream stdout to xterm.js, persist events to SQLite. Go/No-Go by end of Week 2.
 
