@@ -79,3 +79,17 @@ The TODOs below were updated on 2026-03-28 following a product pivot:
 **Priority:** P1
 **Depends on:** Phase 2 (SQLite persistence + process registry must exist first)
 **Status:** OPEN
+
+---
+
+## T7: Define watch-and-learn false-positive budget
+
+**What:** Specify the statistical criteria that distinguish a real pattern (worth surfacing as a policy suggestion) from noise. Minimum threshold: P(repeated failure | same agent) > 80% AND error count > 5 in a 24h window. Only surface suggestions when the signal is above this threshold.
+**Why:** Without a false-positive budget, the Orchestrator surfaces 10 suggestions in 48 hours and 9 are noise — the feature is abandoned, not refined.
+**Pros:** Defines "signal" vs "noise" before Phase 3. Gives the engineer a measurable goal. Prevents watch-and-learn from becoming a annoyance engine.
+**Cons:** Real patterns with low frequency might be missed if the threshold is too high.
+**Context:** Phase 3 adds the Orchestrator. The threshold can be calibrated against Phase 2 runtime data (actual error rates, tool call durations).
+**Effort:** S | CC: S
+**Priority:** P2
+**Depends on:** Phase 2 (need real error rates and durations to calibrate)
+**Status:** OPEN
