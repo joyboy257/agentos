@@ -11,7 +11,7 @@ Supersedes: docs/design/2026-03-28-agentos-reimagined-design.md (initial reimagi
 
 ## tl;dr
 
-**AgentOS is "VS Code for agents."** Built from scratch for what AI agents actually are: living, reasoning processes — not API pipelines, not code functions. Three pillars: (1) visual canvas for composing agents, (2) integrated terminal that's the actual runtime, (3) Orchestrator agent as a first-class watchdog. MCP-native throughout.
+**AgentOS: Build your own AI agent team — visually, without code.** Anyone can assemble a multi-agent workflow on a visual canvas. Not just developers. Three pillars: (1) visual canvas with multiple view modes (Kanban, node workflow, etc.), (2) integrated runtime where agents actually run, (3) Orchestrator that watches for failures. MCP-native. The secret sauce is UI/UX taste + ease-of-use for non-technical users. Cling proves the space is real; AgentOS wins on audience and accessibility.
 
 **Runtime: Electron.** MCP via STDIO works natively in Electron's main process. `child_process.spawn()` or `UtilityProcess` API hosts agent processes. OpenSumi (`opensumi/core`, 3.6k stars) proves the stack works — AI Native IDE framework with MCP + xterm.js + React. No cloud infra, no WASM, no compromise.
 
@@ -19,14 +19,14 @@ Supersedes: docs/design/2026-03-28-agentos-reimagined-design.md (initial reimagi
 
 ## Problem Statement
 
-The IDE and terminal were built for humans writing code. AI agents are not humans writing code — they are autonomous processes that *use* tools, *collaborate* with other agents, and *reason* about what to do next.
+The IDE and terminal were built for humans writing code. AI agents are not humans writing code — they are autonomous processes that *use* tools, *collaborate* with other agents, and *reason* about what to do next. The masses use ChatGPT. The gap is helping non-technical people harness multi-agent AI without writing code.
 
 Every existing tool either:
-- **Bolts AI onto a workflow canvas** (n8n, Dify, LangFlow) — workflows are static API pipelines, not agents-as-processes
-- **Gives you raw code with no visual debugging** (CrewAI, AutoGen) — agents are Python classes, not first-class visual objects
-- **Is terminal-only and solo** (Claude Code) — best agent experience, but no canvas, no orchestration, session-based
+- **Bolts AI onto a workflow canvas** (n8n, Dify, LangFlow) — workflows are static API pipelines, not agents-as-processes; requires technical setup
+- **Gives you raw code with no visual debugging** (CrewAI, AutoGen) — agents are Python classes, not first-class visual objects; requires coding
+- **Is terminal-only and solo** (Claude Code, Cling) — best agent experience, but no canvas for non-coders, session-based, developer-focused
 
-**Agents are none of these things.** An agent is: a persistent process, a reasoning entity, a tool user, a collaborator, a memory-bearing entity. The IDE/terminal were designed for *humans writing code*. That's the gap.
+**Agents are none of these things.** An agent is: a persistent process, a reasoning entity, a tool user, a collaborator, a memory-bearing entity. The IDE/terminal were designed for *developers writing code*. The masses using ChatGPT don't know what a terminal is. That's the gap.
 
 ---
 
@@ -57,15 +57,15 @@ The workaround is:
 
 ## Target User & Narrowest Wedge
 
-**Primary buyer:** Indie dev / solo builder (3-5 personal agents)
-**Day 1 wedge:** Visual agent canvas — see all agents on a canvas with live state, connect them, see capability edges emerge
-**Secondary:** Team leads, startup founders, enterprise AI engineers
+**Primary buyer:** Non-technical power users: marketing managers, ops leads, small business owners who use ChatGPT but have never built a multi-agent workflow. They can reason about "a team that handles my Google Ads" without knowing what a terminal is.
+**Secondary:** Indie hackers / solo builders (3-5 personal agents) who want visual orchestration.
+**Day 1 wedge:** Visual agent canvas — see all agents on a canvas with live state, connect them, watch them work. No terminal required.
 
-Why indie dev first:
-- Fastest to adopt (no procurement)
-- Highest tolerance for rough edges
-- Strongest evangelists if it works
-- tmux grid pain is identical to team lead pain, just smaller scale
+Why non-technical users first:
+- Uncrowded wedge vs Cling (developer-focused, same three pillars)
+- Higher leverage: a marketing manager's time is more expensive than a developer's
+- Evangelism: "I built this without writing code" is a powerful story
+- tmux grid pain exists for developers too, but the non-technical workflow pain is larger and less served
 
 ---
 
