@@ -13,6 +13,18 @@ Updated on 2026-03-28:
 
 ---
 
+## T8: Landing page design polish
+
+**What:** The current landing page (`/landing`) looks "vibe-coded" — needs a full pass with `impeccable`, `bolder`, `polish`, and other frontend design skills to bring it to production quality.
+**Why:** First impression for investors and early users. Currently undermines the premium positioning.
+**Priority:** P1
+**Status:** OPEN
+**Depends on:** Design skills swarm (impeccable, bolder, polish, colorize, typeset)
+**Assets:** Wireframe reference at `/tmp/gstack-sketch-agentos-v3.html`, design doc at `~/.gstack/projects/joyboy257-agentos/deon-main-design-20260329-140000.md`
+**Deployed:** https://landing-pknepowwe-deonaqwx-9156s-projects.vercel.app (password disabled)
+
+---
+
 ## T1: Define the agent lifecycle state machine
 
 **What:** Specify exact agent states (`idle | running | waiting | error | completed`), transition rules, and restart/backoff strategy when a crashed agent is restarted by the watchdog.

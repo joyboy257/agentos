@@ -59,6 +59,31 @@ AgentOS is a visual platform for multi-agent AI orchestration — built for peop
 - better-sqlite3 for persistence
 - See TODOs.md T1-T7 for engineering concerns
 
+## Deploy Configuration
+
+Two separate Vercel deployments:
+
+| Project | Local Path | Vercel Project |
+|---------|------------|----------------|
+| Landing page | `/Users/deon/agentos/landing/` | vercel.com/project/landing |
+| App | `/Users/deon/agentos/app/` | vercel.com/project/agentos-app |
+
+### Deploy Instructions
+
+**Landing:**
+```bash
+cd /Users/deon/agentos/landing && vercel --prod
+```
+
+**App:**
+```bash
+cd /Users/deon/agentos/app && vercel --prod
+```
+
+**Important:** Root `/Users/deon/agentos/` has no package.json. Build from subdirectories only.
+
+---
+
 ## Design Principles
 
 - **Show, don't tell** — users understand by doing, not reading
