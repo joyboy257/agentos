@@ -50,6 +50,11 @@ interface JSONSchema {
   description?: string;
   enum?: unknown[];
   default?: unknown;
+  /** Semantic type tag for field-level dependency resolution.
+   * Examples: "emailAddress", "threadId", "messageId", "userId",
+   *           "query", "url", "date", "duration", "channelRef"
+   */
+  semanticType?: string;
 }
 
 interface Capability {
@@ -90,6 +95,10 @@ interface Capability {
    * JSON Schema describing the input parameters this capability accepts.
    * The NL layer infers these from the user goal and validates
    * before constructing the execution plan.
+   *
+   * Each input field SHOULD have a `semanticType` tag (e.g., "emailId",
+   * "threadId", "query") to enable field-level dependency resolution
+   * across capabilities.
    */
   inputSchema: JSONSchema;
 
@@ -97,16 +106,18 @@ interface Capability {
    * JSON Schema describing the output this capability returns.
    * Used by the NL layer to format responses and by downstream
    * capabilities that consume this output as input.
+   *
+   * Each output field SHOULD have a `semanticType` tag to enable
+   * semantic field matching in resolveDependencies.
    */
   outputSchema: JSONSchema;
 
   /**
-   * If true, the execution engine halts and requests human approval
-   * before invoking the underlying tools.
-   * Applies to destructive or externally-sending actions (email send,
-   * Slack post, file delete, payment).
+   * Approval configuration for this capability.
+   * Destructive or externally-sending actions (email send, Slack post,
+   * file delete, payment) require explicit human approval.
    */
-  requiresApproval: boolean;
+  approvalConfig: ApprovalConfig;
 
   /**
    * If true, this is a control-flow primitive (delay, condition, loop).
@@ -119,11 +130,45 @@ interface Capability {
   isControlFlow?: boolean;
 
   /**
+   * Estimated worst-case execution duration in milliseconds.
+   * Used by the execution planner for timeout and scheduling decisions.
+   * If omitted, the planner uses a default (e.g., 30 000 ms).
+   * Set to -1 if duration is indeterminate (e.g., indefinite watch).
+   */
+  estimatedDurationMs?: number;
+
+  /**
    * Example prompt strings that correctly invoke this capability.
    * Used for few-shot prompting in the NL layer and for automated
    * regression testing of trigger matching.
    */
   examples?: string[];
+}
+
+/** Approval configuration — replaces the previous `requiresApproval: boolean` flag. */
+interface ApprovalConfig {
+  /**
+   * Who must approve this action.
+   *   "user"        — the end user who initiated the goal
+   *   "approver"    — a designated approver (e.g., manager, admin)
+   *   "none"        — no approval required (same as omitting the capability)
+   */
+  approverType: "user" | "approver" | "none";
+
+  /**
+   * Seconds to wait for approval before taking the fallback action.
+   * If exceeded and no fallback is specified, the step is aborted.
+   */
+  timeoutSeconds?: number;
+
+  /**
+   * Fallback action when approval times out.
+   *   "skip"   — skip this step and continue the plan
+   *   "abort"  — abort the entire execution plan
+   *   "retry"  — re-prompt for approval
+   *   string   — capability ID to execute instead
+   */
+  fallback?: "skip" | "abort" | "retry" | string;
 }
 ```
 
@@ -139,8 +184,8 @@ interface CapabilityMatch {
 
 interface ExecutionPlan {
   steps: ExecutionStep[];
-  estimatedDuration?: number;  // milliseconds
-  requiresApproval: boolean;   // OR of all step requiresApproval flags
+  estimatedDurationMs: number;  // sum of all step durations; -1 if indeterminate
+  requiresApproval: boolean;   // true if any step has approverType !== "none"
 }
 
 interface ExecutionStep {
@@ -151,8 +196,33 @@ interface ExecutionStep {
 
 interface RegistryQuery {
   goal: string;                  // raw user goal
-  context?: Record<string, unknown>;  // current session context
+  context?: ExecutionContext;    // current session/execution context
   limit?: number;                // max results (default 5)
+}
+
+/** Execution context passed to the registry query to enable context-aware filtering. */
+interface ExecutionContext {
+  /** Active capability IDs already assigned in the current plan.
+   *  Used to avoid returning duplicate or conflicting capabilities.
+   */
+  activeCapabilities?: string[];
+
+  /** Channel/platform through which the user is interacting.
+   *  Examples: "slack", "email", "web", "calendar"
+   */
+  channel?: string;
+
+  /** User's authenticated identity */
+  userId?: string;
+
+  /** Current session identifier */
+  sessionId?: string;
+
+  /** Organisation/workspace context */
+  orgId?: string;
+
+  /** Arbitrary additional context specific to the NL layer or integration */
+  extras?: Record<string, unknown>;
 }
 ```
 
@@ -191,6 +261,7 @@ Read messages from the user's Gmail inbox.
       query: {
         type: "string",
         description: "Gmail search query string (e.g. 'from:sarah after:2026/03/01')",
+        semanticType: "query",
         default: ""
       },
       maxResults: {
@@ -215,23 +286,25 @@ Read messages from the user's Gmail inbox.
         items: {
           type: "object",
           properties: {
-            id: { type: "string" },
-            threadId: { type: "string" },
-            from: { type: "string" },
-            subject: { type: "string" },
-            snippet: { type: "string" },
-            body: { type: "string" },
-            date: { type: "string" },
-            labels: { type: "array", items: { type: "string" } }
+            id:        { type: "string", description: "Message ID",          semanticType: "emailId" },
+            threadId:  { type: "string", description: "Thread/gmail thread ID", semanticType: "threadId" },
+            from:      { type: "string", description: "Sender email address" },
+            subject:   { type: "string" },
+            snippet:   { type: "string" },
+            body:      { type: "string" },
+            date:      { type: "string" },
+            labels:    { type: "array", items: { type: "string" } }
           }
         }
       },
-      totalCount: { type: "number" },
+      totalCount:   { type: "number" },
       nextPageToken: { type: "string", nullable: true }
     }
   },
 
-  requiresApproval: false,
+  approvalConfig: { approverType: "none" },
+
+  estimatedDurationMs: 2000,
 
   examples: [
     "Did I get any emails from John this week?",
@@ -275,29 +348,35 @@ Send an email via Gmail. **Requires approval** because this is a write/send acti
       to: {
         type: "array",
         items: { type: "string" },
-        description: "Recipient email addresses"
+        description: "Recipient email addresses",
+        semanticType: "emailAddress"
       },
       cc: {
         type: "array",
         items: { type: "string" },
-        description: "CC recipient email addresses"
+        description: "CC recipient email addresses",
+        semanticType: "emailAddress"
       },
       bcc: {
         type: "array",
         items: { type: "string" },
-        description: "BCC recipient email addresses"
+        description: "BCC recipient email addresses",
+        semanticType: "emailAddress"
       },
       subject: {
         type: "string",
-        description: "Email subject line"
+        description: "Email subject line",
+        semanticType: "subject"
       },
       body: {
         type: "string",
-        description: "Plaintext or HTML email body"
+        description: "Plaintext or HTML email body",
+        semanticType: "messageBody"
       },
       threadId: {
         type: "string",
-        description: "Thread ID to reply within (leave empty for new thread)"
+        description: "Thread ID to reply within (leave empty for new thread)",
+        semanticType: "threadId"
       },
       attachments: {
         type: "array",
@@ -311,15 +390,21 @@ Send an email via Gmail. **Requires approval** because this is a write/send acti
   outputSchema: {
     type: "object",
     properties: {
-      messageId: { type: "string" },
-      threadId: { type: "string" },
-      to: { type: "array", items: { type: "string" } },
-      subject: { type: "string" },
-      sentAt: { type: "string" }
+      messageId: { type: "string", semanticType: "emailId" },
+      threadId:  { type: "string", semanticType: "threadId" },
+      to:        { type: "array", items: { type: "string" } },
+      subject:   { type: "string" },
+      sentAt:    { type: "string" }
     }
   },
 
-  requiresApproval: true,
+  approvalConfig: {
+    approverType: "user",
+    timeoutSeconds: 300,
+    fallback: "abort"
+  },
+
+  estimatedDurationMs: 3000,
 
   examples: [
     "Send an email to alice@example.com saying the report is ready",
@@ -363,7 +448,8 @@ Perform a web search and return structured results.
     properties: {
       query: {
         type: "string",
-        description: "The search query string"
+        description: "The search query string",
+        semanticType: "query"
       },
       numResults: {
         type: "number",
@@ -397,21 +483,23 @@ Perform a web search and return structured results.
         items: {
           type: "object",
           properties: {
-            title: { type: "string" },
-            url: { type: "string" },
+            title:   { type: "string" },
+            url:     { type: "string", semanticType: "url" },
             snippet: { type: "string" },
             favicon: { type: "string" },
-            source: { type: "string" },
-            date: { type: "string", nullable: true }
+            source:  { type: "string" },
+            date:    { type: "string", nullable: true }
           }
         }
       },
       totalResults: { type: "number" },
-      query: { type: "string" }
+      query:        { type: "string", semanticType: "query" }
     }
   },
 
-  requiresApproval: false,
+  approvalConfig: { approverType: "none" },
+
+  estimatedDurationMs: 1500,
 
   examples: [
     "Search for the latest news on AI agents",
@@ -454,16 +542,19 @@ A control-flow primitive that branches execution based on whether an external ac
       channel: {
         type: "string",
         description: "The thread or conversation channel to monitor (email thread ID or Slack channel ID)",
-        enum: ["email", "slack"]
+        enum: ["email", "slack"],
+        semanticType: "channelType"
       },
       threadRef: {
         type: "string",
-        description: "Reference to the specific thread or message ID to watch"
+        description: "Reference to the specific thread or message ID to watch",
+        semanticType: "threadId"   // email: threadId; slack: channel ID + thread ts
       },
       timeout: {
         type: "number",
         description: "Maximum seconds to wait before triggering onNoReply branch",
-        default: 7200  // 2 hours
+        default: 7200,  // 2 hours
+        minimum: 1
       },
       onReply: {
         type: "array",
@@ -496,8 +587,9 @@ A control-flow primitive that branches execution based on whether an external ac
     }
   },
 
-  requiresApproval: false,
+  approvalConfig: { approverType: "none" },
   isControlFlow: true,
+  estimatedDurationMs: -1,   // indeterminate — waits indefinitely
 
   examples: [
     "If they reply saying 'approved', send the contract. Otherwise send a reminder after 2 hours.",
@@ -506,6 +598,50 @@ A control-flow primitive that branches execution based on whether an external ac
   ]
 }
 ```
+
+#### Watch State Persistence Model
+
+The `condition:if_no_reply` capability must maintain watch state across time because the condition may span minutes to hours. The execution engine persists this state so that it survives process restarts and can be resumed on node failover.
+
+**Persistence store: Redis (recommended) or equivalent KV store**
+
+Rationale: Low latency reads/writes, TTL support for automatic expiry, pub/sub for watch notifications. In-memory-only persistence is insufficient for multi-hour watches.
+
+**Key schema:**
+
+```
+Key:   watch:{sessionId}:{capabilityInstanceId}
+Value: JSON {
+  threadRef:      string,       // thread/channel being watched
+  channel:        "email"|"slack",
+  startedAt:      string (ISO),// when watch began
+  timeoutAt:      string (ISO),// when timeout fires
+  status:         "watching"|"resolved"|"timed_out"|"cancelled",
+  onReply:        string[],     // capability IDs for onReply branch
+  onNoReply:       string[],     // capability IDs for onNoReply branch
+  userId:         string,
+  orgId:          string,
+  planId:         string,       // ExecutionPlan ID this watch belongs to
+  resolvedOutcome?: "replied"|"timeout",
+  replyMessage?:   object       // set when status becomes "resolved"
+}
+TTL: timeout + 300s (5-min buffer after expected timeout)
+```
+
+**Transitions:**
+
+| Event | Transition |
+|-------|------------|
+| Watch created | status = "watching", TTL = timeout + 300s |
+| External reply received | status = "resolved", resolvedOutcome = "replied", replyMessage = msg, TTL = 300s |
+| Timeout fires | status = "timed_out", resolvedOutcome = "timeout", TTL = 300s |
+| Plan cancelled | status = "cancelled", key deleted |
+
+**Notification mechanism:**
+- Email watch: use Gmail push notifications (google pubsub) or polling fallback
+- Slack watch: use Slack Event API with app-level token
+
+**NL layer contract:** The NL layer receives `outcome: "replied"|"timeout"` and the `replyMessage` object in the output schema. The NL layer is responsible for deciding which branch of the plan to execute based on `outcome`.
 
 ---
 
@@ -539,7 +675,8 @@ A control-flow primitive that pauses execution for a specified duration before r
       seconds: {
         type: "number",
         description: "Number of seconds to wait",
-        minimum: 1
+        minimum: 1,
+        maximum: 86400   // CRITICAL: prevent infinite loops; max 24 hours
       },
       resumeWith: {
         type: "string",
@@ -556,14 +693,15 @@ A control-flow primitive that pauses execution for a specified duration before r
   outputSchema: {
     type: "object",
     properties: {
-      startedAt: { type: "string" },
-      endedAt: { type: "string" },
-      durationSeconds: { type: "number" }
+      startedAt:        { type: "string" },
+      endedAt:          { type: "string" },
+      durationSeconds:  { type: "number" }
     }
   },
 
-  requiresApproval: false,
+  approvalConfig: { approverType: "none" },
   isControlFlow: true,
+  estimatedDurationMs: 0,   // computed at runtime from `seconds` input
 
   examples: [
     "Wait 30 seconds and then check again",
@@ -573,6 +711,8 @@ A control-flow primitive that pauses execution for a specified duration before r
   ]
 }
 ```
+
+**Maximum duration constraint:** The `delay` capability enforces `maximum: 86400` (24 hours) on the `seconds` field. This prevents accidental infinite delay loops. For delays exceeding 24 hours, the NL layer should decompose the wait into multiple `delay` steps with intermediate checkpoints, or use the `condition:if_no_reply` mechanism.
 
 ---
 
@@ -604,15 +744,18 @@ Post a message to a Slack channel or user. **Requires approval** for external-fa
     properties: {
       channel: {
         type: "string",
-        description: "Slack channel name (with #) or user ID to post to"
+        description: "Slack channel name (with #) or user ID to post to",
+        semanticType: "channelRef"
       },
       text: {
         type: "string",
-        description: "Main message text (supports Slack Markdown)"
+        description: "Main message text (supports Slack Markdown)",
+        semanticType: "messageBody"
       },
       threadTs: {
         type: "string",
-        description: "Timestamp of parent message to reply in thread"
+        description: "Timestamp of parent message to reply in thread",
+        semanticType: "messageId"
       },
       blocks: {
         type: "array",
@@ -631,13 +774,19 @@ Post a message to a Slack channel or user. **Requires approval** for external-fa
   outputSchema: {
     type: "object",
     properties: {
-      ts: { type: "string", description: "Timestamp of posted message" },
-      channel: { type: "string" },
-      text: { type: "string" }
+      ts:      { type: "string", description: "Timestamp of posted message", semanticType: "messageId" },
+      channel: { type: "string", semanticType: "channelRef" },
+      text:    { type: "string" }
     }
   },
 
-  requiresApproval: true,
+  approvalConfig: {
+    approverType: "user",
+    timeoutSeconds: 300,
+    fallback: "abort"
+  },
+
+  estimatedDurationMs: 2000,
 
   examples: [
     "Post to #engineering that the deploy is complete",
@@ -678,11 +827,13 @@ Query the user's calendar for events within a date range.
     properties: {
       timeMin: {
         type: "string",
-        description: "Start of date/time range (ISO 8601)"
+        description: "Start of date/time range (ISO 8601)",
+        semanticType: "dateTime"
       },
       timeMax: {
         type: "string",
-        description: "End of date/time range (ISO 8601)"
+        description: "End of date/time range (ISO 8601)",
+        semanticType: "dateTime"
       },
       maxResults: {
         type: "number",
@@ -705,21 +856,23 @@ Query the user's calendar for events within a date range.
         items: {
           type: "object",
           properties: {
-            id: { type: "string" },
-            summary: { type: "string" },
-            start: { type: "string" },
-            end: { type: "string" },
-            attendees: { type: "array", items: { type: "string" } },
-            location: { type: "string", nullable: true },
+            id:          { type: "string" },
+            summary:     { type: "string" },
+            start:       { type: "string", semanticType: "dateTime" },
+            end:         { type: "string", semanticType: "dateTime" },
+            attendees:   { type: "array", items: { type: "string" } },
+            location:    { type: "string", nullable: true },
             description: { type: "string", nullable: true },
-            colorId: { type: "string", nullable: true }
+            colorId:     { type: "string", nullable: true }
           }
         }
       }
     }
   },
 
-  requiresApproval: false,
+  approvalConfig: { approverType: "none" },
+
+  estimatedDurationMs: 1500,
 
   examples: [
     "What's on my calendar tomorrow?",
@@ -741,8 +894,8 @@ When the NL layer receives a user goal, it performs the following steps:
 ```
 1. RECEIVE goal: "I need to follow up with anyone who hasn't replied to the project update"
 2. EXTRACT key phrases: ["follow up", "hasn't replied", "project update"]
-3. QUERY registry with goal text and extracted phrases
-4. RANK matches by score (0.0–1.0)
+3. QUERY registry with goal text and extracted phrases (pass ExecutionContext)
+4. RANK matches by score (0.0–1.0), filtering by context.activeCapabilities
 5. BUILD execution plan from top matches
 6. VALIDATE inputSchema against inferred inputs
 7. EXECUTE or REQUEST approval
@@ -756,6 +909,20 @@ class CapabilityRegistry {
   private capabilities: Map<string, Capability> = new Map();
 
   /**
+   * In-memory rate limiter state.
+   * Key: "query:{sessionId}" | "query:{userId}" — one of which must be provided.
+   * Value: { count: number; windowStart: number }
+   */
+  private rateLimitState: Map<string, { count: number; windowStart: number }> = new Map();
+
+  /**
+   * Global rate limit configuration.
+   * Applied per session or per user depending on which identifier is available.
+   */
+  private readonly RATE_LIMIT_MAX   = 100;  // max queries
+  private readonly RATE_LIMIT_WINDOW_MS = 60_000;  // per 60-second window
+
+  /**
    * Query the registry for capabilities matching a user goal.
    *
    * The NL layer calls this with the raw user goal and gets back
@@ -764,6 +931,30 @@ class CapabilityRegistry {
   async query(input: RegistryQuery): Promise<CapabilityMatch[]> {
     const { goal, context, limit = 5 } = input;
 
+    // ── Rate limiting ──────────────────────────────────────────────────────
+    const limiterKey = (context?.sessionId ?? context?.userId ?? "anonymous")
+      .replace(/[^a-zA-Z0-9]/g, "");
+
+    const now = Date.now();
+    const rateEntry = this.rateLimitState.get(limiterKey) ?? {
+      count: 0,
+      windowStart: now,
+    };
+
+    if (now - rateEntry.windowStart > this.RATE_LIMIT_WINDOW_MS) {
+      rateEntry.count = 0;
+      rateEntry.windowStart = now;
+    }
+
+    if (++rateEntry.count > this.RATE_LIMIT_MAX) {
+      throw new Error(
+        `Rate limit exceeded for ${limiterKey}. ` +
+        `Max ${this.RATE_LIMIT_MAX} queries per ${this.RATE_LIMIT_WINDOW_MS / 1000}s.`
+      );
+    }
+    this.rateLimitState.set(limiterKey, rateEntry);
+    // ───────────────────────────────────────────────────────────────────────
+
     // Step 1: Tokenize and normalize the goal
     const goalTokens = this.tokenize(goal);
 
@@ -771,6 +962,17 @@ class CapabilityRegistry {
     const scored: CapabilityMatch[] = [];
 
     for (const capability of this.capabilities.values()) {
+
+      // ── Context filtering ──────────────────────────────────────────────
+      // Skip if this capability is already active in the plan.
+      if (
+        context?.activeCapabilities?.length &&
+        context.activeCapabilities.includes(capability.id)
+      ) {
+        continue;
+      }
+      // ───────────────────────────────────────────────────────────────────
+
       const triggerScores = capability.triggers.map(trigger => ({
         trigger,
         score: this.cosineSimilarity(
@@ -785,7 +987,8 @@ class CapabilityRegistry {
         { trigger: "", score: 0 }
       );
 
-      if (best.score > 0.1) {
+      // CRITICAL fix: raise threshold from 0.1 to 0.5
+      if (best.score > 0.5) {
         scored.push({
           capability,
           score: best.score,
@@ -803,29 +1006,153 @@ class CapabilityRegistry {
       .slice(0, limit);
   }
 
+  /**
+   * Tokenize a phrase for keyword-based similarity scoring.
+   *
+   * This is a simple whitespace+lowercase tokenizer used as the
+   * baseline BM25/TF-IDF pipeline. For production, this function
+   * feeds the TF-IDF vectorizer below.
+   *
+   * A more semantically robust alternative is to replace this with
+   * an OpenAI embeddings call (see embed() below) and use
+   * vector cosine similarity instead.
+   */
+  tokenize(text: string): Set<string> {
+    return new Set(
+      text
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(token => token.length > 1)
+    );
+  }
+
+  /**
+   * Compute cosine similarity between two token sets using the classic
+   * set-overlapping formula: |A ∩ B| / sqrt(|A| * |B|).
+   *
+   * This is equivalent to cosine similarity on one-hot vectors and
+   * serves as the baseline keyword-matching scorer.
+   *
+   * For semantic matching, replace this with embedding-based similarity:
+   *
+   *   async embed(text: string): Promise<number[]> {
+   *     const res = await fetch("https://api.openai.com/v1/embeddings", {
+   *       method: "POST",
+   *       headers: {
+   *         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+   *         "Content-Type": "application/json"
+   *       },
+   *       body: JSON.stringify({
+   *         model: "text-embedding-3-small",
+   *         input: text
+   *       })
+   *     });
+   *     const { data } = await res.json();
+   *     return data[0].embedding;   // number[]
+   *   }
+   *
+   *   async embeddingSimilarity(a: string, b: string): Promise<number> {
+   *     const [vecA, vecB] = await Promise.all([this.embed(a), this.embed(b)]);
+   *     const dot = vecA.reduce((sum, v, i) => sum + v * vecB[i], 0);
+   *     const mag = (v: number[]) => Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+   *     return dot / (mag(vecA) * mag(vecB));
+   *   }
+   *
+   * The trigger matching loop then becomes:
+   *   score: await this.embeddingSimilarity(trigger, goal)
+   *
+   * Hybrid approach (BM25 + embeddings) is recommended for production.
+   */
   private cosineSimilarity(a: Set<string>, b: Set<string>): number {
     const intersection = new Set([...a].filter(x => b.has(x)));
+    if (intersection.size === 0) return 0;
     return intersection.size / Math.sqrt(a.size * b.size);
   }
 
   /**
-   * Given a capability's inputSchema and the user goal,
-   * extract parameter values from the goal text.
+   * Given a capability's inputSchema and the user goal, extract
+   * parameter values from the goal text.
    *
-   * Example:
-   *   goal: "Email john@example.com about the Q1 budget"
-   *   schema: { to: {...}, subject: {...}, body: {...} }
-   *   → inferredInputs: { to: ["john@example.com"], subject: "Q1 budget" }
+   * EXTRACTION CONTRACT:
+   * The NL layer is responsible for calling an LLM (GPT-4o or similar)
+   * to extract structured parameter values from free-text user goals.
+   * This method defines the contract/schema that extraction targets.
+   *
+   * Step 1 — Identify unsatisfied inputs:
+   *   For each field in inputSchema.properties that has no value in
+   *   sessionState or context.extras, the field is marked "unsatisfied".
+   *
+   * Step 2 — Extract from goal text:
+   *   The NL layer sends the unsatisfied field list (with their
+   *   semanticType tags and descriptions) along with the user goal to
+   *   an LLM extraction prompt. The LLM returns a map of field name
+   *   -> extracted value.
+   *
+   * Step 3 — Merge with context/session state:
+   *   Any field already populated in sessionState (e.g., threadId from
+   *   a prior email:read step) is carried through automatically and does
+   *   NOT need to appear in the goal text.
+   *
+   * Extraction prompt template:
+   *   ```
+   *   Given the following user goal and input schema, extract values
+   *   for each field. Only extract fields that are explicitly mentioned
+   *   or can be unambiguously inferred. Leave undefined for fields
+   *   that cannot be determined.
+   *
+   *   User goal: {goal}
+   *
+   *   Schema fields:
+   *   {fields.map(f => `  - ${f.name} (${f.semanticType}): ${f.description}`).join('\n')}
+   *
+   *   Return a JSON object mapping field names to extracted values.
+   *   ```
+   *
+   * @param schema      The inputSchema of the capability being queried
+   * @param goal        The raw user goal string
+   * @param context     ExecutionContext (session state, userId, channel, etc.)
+   * @returns           A map of field names to extracted values;
+   *                    empty object {} means no inputs could be extracted
    */
   private inferInputs(
     schema: JSONSchema,
     goal: string,
-    context?: Record<string, unknown>
+    context?: ExecutionContext
   ): Record<string, unknown> {
-    // Implementation uses NER (named entity recognition) or GPT-4o
-    // completion to extract structured params from free text.
-    // This is delegated to the NL layer's own extraction logic.
-    // The registry schema is the contract that NL extraction targets.
+    // ── Step 1: Determine unsatisfied fields ─────────────────────────────
+    const sessionState = context?.extras ?? {};
+    const unsatisfiedFields: Array<{
+      name: string;
+      semanticType?: string;
+      description?: string;
+      schema: JSONSchema;
+    }> = [];
+
+    if (schema.properties) {
+      for (const [fieldName, fieldSchema] of Object.entries(schema.properties)) {
+        // Field is satisfied if it exists in session state with a non-null value
+        if (
+          fieldName in sessionState &&
+          sessionState[fieldName] != null
+        ) {
+          continue;  // already satisfied — carry through
+        }
+        unsatisfiedFields.push({ name: fieldName, schema: fieldSchema });
+      }
+    }
+
+    if (unsatisfiedFields.length === 0) {
+      return {};  // all inputs satisfied by context
+    }
+
+    // ── Step 2: NL extraction (delegated to calling NL layer) ─────────────
+    // The registry does NOT call the LLM directly — it returns the schema
+    // of what needs to be extracted, and the NL layer performs the
+    // extraction and passes results back via ExecutionContext.extras or
+    // as direct inputs to the capability invocation.
+    //
+    // For stub implementation, return empty object. The NL layer must
+    // implement the actual LLM extraction loop.
     return {}; // Placeholder — actual implementation in NL layer
   }
 }
@@ -855,33 +1182,69 @@ function buildExecutionPlan(matches: CapabilityMatch[]): ExecutionPlan {
     });
   }
 
+  const totalDurationMs = steps.reduce((sum, step) => {
+    const cap = capabilities.get(step.capabilityId);
+    const d = cap?.estimatedDurationMs ?? 0;
+    return sum + (d < 0 ? 0 : d);  // treat -1 (indeterminate) as 0 for sum
+  }, 0);
+
   return {
     steps,
-    requiresApproval: steps.some(s =>
-      capabilities.get(s.capabilityId)?.requiresApproval
-    )
+    estimatedDurationMs: totalDurationMs,
+    requiresApproval: steps.some(s => {
+      const cap = capabilities.get(s.capabilityId);
+      return cap?.approvalConfig.approverType !== "none";
+    })
   };
 }
 
 /**
- * Resolve which previous steps' outputs feed into this step's inputs.
- * A step B depends on step A if B's inputSchema references a type
- * that A's outputSchema produces.
+ * Resolve which previous steps' outputs feed into this step's inputs
+ * using FIELD-LEVEL SEMANTIC TYPE MATCHING.
+ *
+ * A step B depends on step A if B's inputSchema contains a field whose
+ * `semanticType` matches the `semanticType` of an output field in A's
+ * outputSchema.
+ *
+ * Example:
+ *   email:send output  { threadId: { semanticType: "threadId" } }
+ *   email:read output  { messages: [{ threadId: { semanticType: "threadId" } }] }
+ *
+ *   email:read --> email:send  (because both have threadId of semanticType "threadId")
+ *
+ * This replaces the broken type-level matching:
+ *   BAD: outputSchema.type === inputSchema.type  (always "object" for both)
+ *   GOOD: field-level semanticType equivalence
  */
 function resolveDependencies(
   capability: Capability,
   priorSteps: ExecutionStep[]
 ): string[] {
   const deps: string[] = [];
-  const inputType = capability.inputSchema.type;
+  const inputProps = capability.inputSchema.properties ?? {};
 
   for (const step of priorSteps) {
     const priorCap = capabilities.get(step.capabilityId);
-    if (priorCap?.outputSchema.type === inputType) {
-      deps.push(step.capabilityId);
+    if (!priorCap) continue;
+
+    const outputProps = priorCap.outputSchema.properties ?? {};
+
+    // Find if ANY output field semantically matches ANY input field
+    for (const [outField, outSchema] of Object.entries(outputProps)) {
+      const outType = outSchema.semanticType ?? outField;  // fallback to field name
+
+      for (const [inField, inSchema] of Object.entries(inputProps)) {
+        const inType = inSchema.semanticType ?? inField;  // fallback to field name
+
+        if (outType === inType) {
+          deps.push(step.capabilityId);
+          break;  // one match is enough to establish the dependency
+        }
+      }
     }
   }
-  return deps;
+
+  return [...new Set(deps)];  // deduplicate
 }
 ```
 
@@ -942,12 +1305,21 @@ Over time, common goal patterns that are currently achieved by composing multipl
 
 ```typescript
 interface CapabilityUsageEvent {
-  timestamp: string;
+  timestamp: string;            // ISO 8601
+  userId: string;              // CRITICAL: user who initiated the goal
+  sessionId: string;          // CRITICAL: session context for correlation
+  orgId: string;              // CRITICAL: organisation/workspace scope
   userGoal: string;
   matchedCapabilities: string[];   // IDs of capabilities used
   executionPlan: ExecutionPlan;
   success: boolean;
   latencyMs: number;
+  /** Additional context for debugging/analytics */
+  context?: {
+    channel?: string;          // slack, email, web, calendar
+    triggerScores?: Record<string, number>;  // capabilityId -> match score
+    fallbackUsed?: boolean;    // true if a fallback was triggered
+  };
 }
 ```
 
@@ -986,12 +1358,12 @@ Frequency: ~40 uses/week across users
   inputSchema: {
     type: "object",
     properties: {
-      emailTo: { type: "array", items: { type: "string" } },
-      emailSubject: { type: "string" },
-      emailBody: { type: "string" },
-      slackUserId: { type: "string" },
-      slackMessage: { type: "string" },
-      timeoutHours: { type: "number", default: 24 }
+      emailTo:          { type: "array",  items: { type: "string" }, semanticType: "emailAddress" },
+      emailSubject:     { type: "string", semanticType: "subject" },
+      emailBody:        { type: "string", semanticType: "messageBody" },
+      slackUserId:      { type: "string", semanticType: "userId" },
+      slackMessage:     { type: "string", semanticType: "messageBody" },
+      timeoutHours:     { type: "number", default: 24, minimum: 1, maximum: 168 }
     },
     required: ["emailTo", "emailSubject", "emailBody", "slackUserId", "slackMessage"]
   },
@@ -999,14 +1371,16 @@ Frequency: ~40 uses/week across users
   outputSchema: {
     type: "object",
     properties: {
-      emailMessageId: { type: "string" },
-      slackTs: { type: "string", nullable: true },
-      outcome: { type: "string", enum: ["replied", "escalated", "pending"] }
+      emailMessageId: { type: "string", semanticType: "emailId" },
+      slackTs:        { type: "string", nullable: true, semanticType: "messageId" },
+      outcome:        { type: "string", enum: ["replied", "escalated", "pending"] }
     }
   },
 
-  requiresApproval: true,
+  approvalConfig: { approverType: "user", timeoutSeconds: 600, fallback: "abort" },
   isControlFlow: true,
+  estimatedDurationMs: -1,
+
   examples: [
     "Email the client and ping them on Slack if they don't reply by tomorrow",
     "Send the proposal and follow up on Slack if no response in 4 hours"
@@ -1092,20 +1466,22 @@ src/
     goal-matcher.ts          # NL-layer trigger matching (uses registry)
     plan-builder.ts          # Builds ExecutionPlan from matches
     fallback-handler.ts      # "I can't do that" handler
+    extractor.ts             # LLM-based input extraction (implements inferInputs contract)
   execution/
     plan-executor.ts         # Executes an ExecutionPlan
+    watch-state-store.ts     # Redis-backed store for condition:if_no_reply watch state
 ```
 
 ---
 
 ## 9. Open Questions
 
-1. **Trigger scoring threshold**: What minimum score (0.0–1.0) should the NL layer require before treating a capability as a valid match? A threshold that is too high misses valid matches; too low causes false positives.
+1. **Trigger scoring threshold**: What minimum score (0.0–1.0) should the NL layer require before treating a capability as a valid match? A threshold that is too high misses valid matches; too low causes false positives. We now use 0.5 as the default but this is tunable.
 
-2. **Embedding vs. keyword matching**: Should trigger matching use TF-IDF/BM25 keyword overlap or dense embeddings? Embeddings are more semantically robust but introduce latency and a dependency on an embedding model.
+2. **Embedding vs. keyword matching**: Should trigger matching use TF-IDF/BM25 keyword overlap or dense embeddings? Embeddings are more semantically robust but introduce latency and a dependency on an embedding model. The document now provides a clear `embed()` scaffolding for OpenAI embeddings, and recommends a hybrid approach for production.
 
 3. **Registry storage**: Is the registry a static JSON file loaded at startup, or a dynamic database that can be updated without a deploy? Flywheel promotion implies the latter, which introduces versioning and consistency concerns.
 
-4. **Approval workflow UX**: `requiresApproval: true` pauses execution, but who approves? A Slack DM? A web UI? The approval flow is execution-engine-level but affects how the NL layer frames the "I'm asking for approval" message to the user.
+4. **Approval workflow UX**: `approvalConfig` now replaces the boolean `requiresApproval`. Who approves? A Slack DM? A web UI? The approval flow is execution-engine-level but affects how the NL layer frames the "I'm asking for approval" message to the user.
 
-5. **Cross-capability input/output contracts**: When `condition:if_no_reply` passes control to `slack:post`, the output of `email:read` (the original message) must be passed through. These data flow contracts need a formal type system beyond `JSONSchema` to ensure correctness.
+5. **Cross-capability input/output contracts**: When `condition:if_no_reply` passes control to `slack:post`, the output of `email:read` (the original message) must be passed through. These data flow contracts need a formal type system beyond `JSONSchema` to ensure correctness. We now use `semanticType` tags to establish field-level contracts, but full type inference across compositions (especially condition branches) remains an open design problem.

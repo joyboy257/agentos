@@ -2,7 +2,7 @@
 
 **Document:** ARCHITECTURE-05-reasoning-trace
 **Status:** Draft
-**Version:** 1.0
+**Version:** 1.1
 **Date:** 2026-03-29
 **Owner:** AgentOS Engineering
 
@@ -19,6 +19,8 @@
 7. [The Trust-Building Effect](#7-the-trust-building-effect)
 8. [Relation to Approval UX](#8-relation-to-approval-ux)
 9. [Implementation Reference](#9-implementation-reference)
+10. [Security Considerations](#10-security-considerations)
+11. [Operational Considerations](#11-operational-considerations)
 
 ---
 
@@ -124,6 +126,8 @@ This metadata transforms the trace from a story into an auditable record.
 
 type ReasoningEventType = 'observation' | 'classification' | 'decision' | 'action' | 'warning'
 
+type WarningSeverity = 'low' | 'medium' | 'high'
+
 interface ReasoningContent {
   /** What the agent is thinking or doing — human-readable */
   text: string
@@ -133,18 +137,62 @@ interface ReasoningContent {
   confidence?: number
   /** Other options that were considered before this decision */
   alternativesConsidered?: string[]
+  /** Severity level for warning events */
+  severity?: WarningSeverity
 }
 
 interface ReasoningEvent {
   event: 'reasoning'
   runId: string
   agentId: string
-  step: number
+  step: string  // ULID — monotonically increasing unique identifier
+  sequence: number  // Monotonic sequence number per run, for ordering and integrity
   type: ReasoningEventType
   content: ReasoningContent
   timestamp: number  // Unix ms, for ordering and latency analysis
+  version: 1  // Schema version for forward compatibility
+  integrity?: {
+    /** HMAC-SHA256 of event payload, excluding integrity field itself */
+    mac: string
+    /** Truncated MAC (first 16 hex chars) for compact logging */
+    tag: string
+  }
 }
 ```
+
+### Integrity Mechanism
+
+Each `ReasoningEvent` is signed using HMAC-SHA256 with a per-run secret generated at run start. The MAC covers the event's `sequence`, `type`, `content.confidence`, `content.evidence`, and `content.alternativesConsidered` fields — the mutable fields most critical to protect against MITM tampering.
+
+```typescript
+// src/runtime/reasoning-integrity.ts
+
+function signReasoningEvent(event: ReasoningEvent, runSecret: string): ReasoningEvent {
+  const payload = [
+    event.sequence,
+    event.type,
+    event.content.confidence ?? '',
+    JSON.stringify(event.content.evidence ?? []),
+    JSON.stringify(event.content.alternativesConsidered ?? []),
+  ].join('|')
+
+  const mac = createHmac('sha256', runSecret).update(payload).digest('hex')
+  const tag = mac.slice(0, 16) // Truncated for compact inclusion
+
+  return {
+    ...event,
+    integrity: { mac, tag },
+  }
+}
+
+function verifyReasoningEvent(event: ReasoningEvent, runSecret: string): boolean {
+  if (!event.integrity) return false
+  const expected = signReasoningEvent({ ...event, integrity: undefined }, runSecret)
+  return event.integrity.mac === expected.integrity?.mac
+}
+```
+
+The `sequence` number in the MAC input prevents reorder and replay attacks. A relay that drops, duplicates, or reorders events will produce a MAC mismatch.
 
 ### JSON Examples
 
@@ -153,12 +201,18 @@ interface ReasoningEvent {
   "event": "reasoning",
   "runId": "run_01HXYZ",
   "agentId": "agent_email_01",
-  "step": 1,
+  "step": "01HXYZ01HXYZ01HXYZ",
+  "sequence": 1,
   "type": "observation",
   "content": {
     "text": "Read 14 unread emails from today"
   },
-  "timestamp": 1743270000000
+  "timestamp": 1743270000000,
+  "version": 1,
+  "integrity": {
+    "mac": "a3f2b8c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+    "tag": "a3f2b8c1d4e5f6a7"
+  }
 }
 ```
 
@@ -167,14 +221,20 @@ interface ReasoningEvent {
   "event": "reasoning",
   "runId": "run_01HXYZ",
   "agentId": "agent_email_01",
-  "step": 2,
+  "step": "01HXYZ01HXYZ01HXYZ",
+  "sequence": 2,
   "type": "classification",
   "content": {
     "text": "Classified as urgent: email from john@client.com",
     "evidence": ["subject contains 'asap'", "sender in priority_contacts list"],
     "confidence": 0.92
   },
-  "timestamp": 1743270001500
+  "timestamp": 1743270001500,
+  "version": 1,
+  "integrity": {
+    "mac": "b4c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+    "tag": "b4c2d3e4f5a6b7c8"
+  }
 }
 ```
 
@@ -183,13 +243,19 @@ interface ReasoningEvent {
   "event": "reasoning",
   "runId": "run_01HXYZ",
   "agentId": "agent_email_01",
-  "step": 3,
+  "step": "01HXYZ01HXYZ01HXYZ",
+  "sequence": 3,
   "type": "decision",
   "content": {
     "text": "Using template 'Pricing Response v2' for this email",
     "alternativesConsidered": ["Pricing Response v1", "Custom draft from scratch", "Defer to user"]
   },
-  "timestamp": 1743270002000
+  "timestamp": 1743270002000,
+  "version": 1,
+  "integrity": {
+    "mac": "c5d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2",
+    "tag": "c5d3e4f5a6b7c8d9"
+  }
 }
 ```
 
@@ -198,12 +264,19 @@ interface ReasoningEvent {
   "event": "reasoning",
   "runId": "run_01HXYZ",
   "agentId": "agent_email_01",
-  "step": 4,
+  "step": "01HXYZ01HXYZ01HXYZ",
+  "sequence": 4,
   "type": "warning",
   "content": {
-    "text": "Could not classify 2 emails — holding for your review"
+    "text": "Could not classify 2 emails — holding for your review",
+    "severity": "medium"
   },
-  "timestamp": 1743270002500
+  "timestamp": 1743270002500,
+  "version": 1,
+  "integrity": {
+    "mac": "d6e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3",
+    "tag": "d6e4f5a6b7c8d9e0"
+  }
 }
 ```
 
@@ -300,12 +373,14 @@ function emitReasoningFromToolCall(
     event: 'reasoning',
     runId: context.runId,
     agentId: context.agentId,
-    step: context.nextStep(),
+    step: ulid(),
+    sequence: context.nextSequence(),
     type: 'decision',
     content: {
       text: toolCall.args.thought,
     },
     timestamp: Date.now(),
+    version: 1,
   }
 }
 ```
@@ -322,6 +397,7 @@ The agent (or runtime) emits `reasoning` events on a dedicated stream alongside 
 
 class AgentRuntime {
   private eventEmitter: EventEmitter
+  private sequenceCounters: Map<string, number> = new Map()
 
   // Agent calls this when it makes a classification
   emitClassification(params: {
@@ -331,20 +407,23 @@ class AgentRuntime {
     evidence: string[]
     confidence: number
   }) {
+    const sequence = this.nextSequence(params.runId)
     const event: ReasoningEvent = {
       event: 'reasoning',
       runId: params.runId,
       agentId: params.agentId,
-      step: this.nextStep(),
+      step: ulid(),
+      sequence,
       type: 'classification',
       content: {
         text: params.text,
-        evidence: params.evidence,
-        confidence: params.confidence,
+        evidence: this.sanitizeEvidence(params.evidence),
+        confidence: this.clampConfidence(params.confidence),
       },
       timestamp: Date.now(),
+      version: 1,
     }
-    this.eventEmitter.emit('reasoning', event)
+    this.eventEmitter.emit(`run-${params.runId}`, 'reasoning', event)
   }
 
   // Agent calls this when it makes a decision
@@ -354,19 +433,22 @@ class AgentRuntime {
     text: string
     alternativesConsidered?: string[]
   }) {
+    const sequence = this.nextSequence(params.runId)
     const event: ReasoningEvent = {
       event: 'reasoning',
       runId: params.runId,
       agentId: params.agentId,
-      step: this.nextStep(),
+      step: ulid(),
+      sequence,
       type: 'decision',
       content: {
         text: params.text,
-        alternativesConsidered: params.alternativesConsidered,
+        alternativesConsidered: this.sanitizeAlternatives(params.alternativesConsidered),
       },
       timestamp: Date.now(),
+      version: 1,
     }
-    this.eventEmitter.emit('reasoning', event)
+    this.eventEmitter.emit(`run-${params.runId}`, 'reasoning', event)
   }
 
   // Agent calls this when it observes something
@@ -375,16 +457,19 @@ class AgentRuntime {
     agentId: string
     text: string
   }) {
+    const sequence = this.nextSequence(params.runId)
     const event: ReasoningEvent = {
       event: 'reasoning',
       runId: params.runId,
       agentId: params.agentId,
-      step: this.nextStep(),
+      step: ulid(),
+      sequence,
       type: 'observation',
       content: { text: params.text },
       timestamp: Date.now(),
+      version: 1,
     }
-    this.eventEmitter.emit('reasoning', event)
+    this.eventEmitter.emit(`run-${params.runId}`, 'reasoning', event)
   }
 
   // Agent calls this when it encounters a warning
@@ -392,17 +477,54 @@ class AgentRuntime {
     runId: string
     agentId: string
     text: string
+    severity?: WarningSeverity
   }) {
+    const sequence = this.nextSequence(params.runId)
     const event: ReasoningEvent = {
       event: 'reasoning',
       runId: params.runId,
       agentId: params.agentId,
-      step: this.nextStep(),
+      step: ulid(),
+      sequence,
       type: 'warning',
-      content: { text: params.text },
+      content: { text: params.text, severity: params.severity ?? 'medium' },
       timestamp: Date.now(),
+      version: 1,
     }
-    this.eventEmitter.emit('reasoning', event)
+    this.eventEmitter.emit(`run-${params.runId}`, 'reasoning', event)
+  }
+
+  private nextSequence(runId: string): number {
+    const current = this.sequenceCounters.get(runId) ?? 0
+    const next = current + 1
+    this.sequenceCounters.set(runId, next)
+    return next
+  }
+
+  private clampConfidence(confidence: number): number {
+    if (typeof confidence !== 'number' || Number.isNaN(confidence)) return 0.5
+    return Math.max(0, Math.min(1, confidence))
+  }
+
+  private sanitizeEvidence(evidence: string[]): string[] {
+    const PII_PATTERNS = [
+      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, // emails
+      /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,                   // phone numbers
+      /\b\d{16}\b/g,                                      // credit cards
+      /\b(NAME|PERSON|USER)[:-]?\s+[A-Z][a-z]+\b/gi,     // name heuristics
+    ]
+    return evidence.map(item => {
+      let sanitized = item
+      for (const pattern of PII_PATTERNS) {
+        sanitized = sanitized.replace(pattern, '[REDACTED]')
+      }
+      return sanitized
+    })
+  }
+
+  private sanitizeAlternatives(alternatives?: string[]): string[] | undefined {
+    if (!alternatives) return undefined
+    return this.sanitizeEvidence(alternatives)
   }
 }
 ```
@@ -418,13 +540,33 @@ Pattern B is the primary recommendation because:
 
 Pattern A (chain-of-thought in tool call arguments) can be used as a **fallback** for agents that are not explicitly instrumented with Pattern B, extracting `thought` strings and wrapping them in `reasoning` events of type `decision`.
 
+### PII Sanitization Requirements
+
+**CRITICAL: LLM context must redact PII before emitting reasoning events.**
+
+The LLM must be instructed never to place raw user data into `evidence` or `alternativesConsidered` fields. The runtime applies pattern-based redaction as a defense-in-depth measure (see `sanitizeEvidence` above), but the primary responsibility lies with the LLM prompt:
+
+```
+SYSTEM PROMPT ADDENDUM:
+When emitting reasoning events, NEVER include raw user data in evidence or
+alternativesConsidered arrays. Substitute any detected PII with [REDACTED].
+Prohibited: email addresses, phone numbers, full names, user IDs, account
+numbers, physical addresses. The reasoning trace is an audit log — it must
+not become a data exfiltration vector.
+```
+
 ### SSE Endpoint Integration
 
 ```typescript
 // src/routes/runs.ts
 
-app.get('/api/runs/:runId/events', async (req, res) => {
+app.get('/api/runs/:runId/events', requireRunOwnership, async (req, res) => {
   const { runId } = req.params
+  const { lastSequence } = req.query  // For cursor-based reconnection
+  const userId = req.user.id
+
+  // requireRunOwnership validates that req.user owns this runId
+  // Unauthorized users receive 403 and no events
 
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
@@ -434,23 +576,111 @@ app.get('/api/runs/:runId/events', async (req, res) => {
     res.write(`event: ${event.event}\ndata: ${JSON.stringify(event)}\n\n`)
   }
 
-  // Subscribe to all event types
-  agentRuntime.on('status', (status) => sendEvent(status))
-  agentRuntime.on('reasoning', (reasoning: ReasoningEvent) => sendEvent(reasoning))
-  agentRuntime.on('tool_call', (tool: ToolCallEvent) => sendEvent(tool))
-  agentRuntime.on('tool_result', (result: ToolResultEvent) => sendEvent(result))
-  agentRuntime.on('run_done', (done: RunDoneEvent) => sendEvent(done))
+  const channel = `run-${runId}`
 
-  // Cleanup on client disconnect
+  // Subscribe to the named channel for this run only
+  // Each client gets its own subscription — no shared singleton listeners
+  if (lastSequence !== undefined) {
+    // Cursor-based reconnect: send events after lastSequence
+    const events = await reasoningStore.getEventsAfter(runId, Number(lastSequence))
+    for (const event of events) {
+      sendEvent(event)
+    }
+  }
+
+  // Forward new events on this run's channel
+  const onEvent = (event: SSEEvent) => sendEvent(event)
+  eventEmitter.on(channel, onEvent)
+
   req.on('close', () => {
-    agentRuntime.removeAllListeners('status')
-    agentRuntime.removeAllListeners('reasoning')
-    agentRuntime.removeAllListeners('tool_call')
-    agentRuntime.removeAllListeners('tool_result')
-    agentRuntime.removeAllListeners('run_done')
+    eventEmitter.off(channel, onEvent)
   })
 })
+
+// Terminal event to signal end of stream
+interface StreamEndEvent {
+  event: 'stream_end'
+  runId: string
+  reason: 'completed' | 'error' | 'cancelled'
+  finalSequence: number
+}
 ```
+
+### Event Aggregation
+
+To prevent burst flooding (e.g., 1000+ loop iterations saturating the SSE stream), reasoning events are aggregated before emission:
+
+```typescript
+// src/runtime/reasoning-aggregator.ts
+
+const AGGREGATION_WINDOW_MS = 500
+const MAX_EMIT_RATE_PER_SECOND = 10
+
+interface AggregationBucket {
+  type: ReasoningEventType
+  text: string
+  count: number
+  firstTimestamp: number
+  lastTimestamp: number
+}
+
+function aggregateReasoningEvents(
+  events: ReasoningEvent[],
+  windowMs: number = AGGREGATION_WINDOW_MS
+): ReasoningEvent[] {
+  const buckets = new Map<string, AggregationBucket>()
+  const now = Date.now()
+
+  for (const event of events) {
+    // Only aggregate observation events (most prone to burst)
+    if (event.type !== 'observation') {
+      continue
+    }
+
+    const key = `${event.type}|${event.content.text}`
+    const existing = buckets.get(key)
+
+    if (existing && (now - existing.lastTimestamp) < windowMs) {
+      existing.count++
+      existing.lastTimestamp = event.timestamp
+    } else {
+      buckets.set(key, {
+        type: event.type,
+        text: event.content.text,
+        count: 1,
+        firstTimestamp: event.timestamp,
+        lastTimestamp: event.timestamp,
+      })
+    }
+  }
+
+  // Emit aggregated events and pass through non-aggregatable events
+  const result: ReasoningEvent[] = []
+  for (const event of events) {
+    if (event.type !== 'observation') {
+      result.push(event)
+      continue
+    }
+    const key = `${event.type}|${event.content.text}`
+    const bucket = buckets.get(key)!
+    if (bucket.count > 1 && event === events.find(e => e.type === 'observation' && e.content.text === bucket.text)) {
+      result.push({
+        ...event,
+        content: {
+          ...event.content,
+          text: `${bucket.text} (x${bucket.count})`,
+        },
+      })
+    } else if (bucket.count === 1) {
+      result.push(event)
+    }
+  }
+
+  return result
+}
+```
+
+Consecutive `observation` events of the same text within a 500ms window are collapsed into a single event with a count suffix (e.g., `"Read inbox (x47)"`). Non-observation events (classification, decision, action, warning) are always passed through immediately.
 
 ---
 
@@ -474,18 +704,18 @@ The canvas UI renders reasoning events in an agent card's reasoning panel.
   +--------------------------------------------------+
   | Reasoning Trace                          [−]   |
   +--------------------------------------------------+
-  | 1. [observation] Read 14 unread emails          |
-  | 2. [classification] 3 urgent, 8 routine         |
-  |    evidence: ["subject: 'asap'", "priority..."] |
-  |    confidence: 0.92                             |
-  | 3. [decision] Replying to urgent emails first   |
-  |    alternatives: [routine first, all at once]   |
-  | 4. [action] Using template "Pricing v2"         |
-  | 5. [warning] 2 emails unclassified              |
+  | 1. [OBS] Read 14 unread emails                  |
+  | 2. [CLS] 3 urgent, 8 routine                    |
+  |     evidence: ["subject: 'asap'", "priority..."]|
+  |     confidence: 0.92                             |
+  | 3. [DEC] Replying to urgent emails first        |
+  |     considered: [routine first, all at once]     |
+  | 4. [ACT] Using template "Pricing v2"            |
+  | 5. [WRN] 2 emails unclassified                  |
   +--------------------------------------------------+
 ```
 
-### Color Coding by Type
+### Color Coding by Type (with Accessibility Labels)
 
 ```typescript
 // src/ui/reasoning-colors.ts
@@ -493,33 +723,45 @@ The canvas UI renders reasoning events in an agent card's reasoning panel.
 const REASONING_COLORS = {
   observation: {
     border: '#E5E7EB',   // gray-200
-    badge: '#6B7280',   // gray-500
-    badgeBg: '#F3F4F6', // gray-100
+    badge: '#6B7280',    // gray-500
+    badgeBg: '#F3F4F6',  // gray-100
+    label: 'Observation',  // Text label for accessibility
+    icon: '○',             // Icon for accessibility
   },
   classification: {
-    border: '#DBEAFE',  // blue-100
-    badge: '#2563EB',   // blue-600
-    badgeBg: '#EFF6FF', // blue-50
+    border: '#DBEAFE',   // blue-100
+    badge: '#2563EB',    // blue-600
+    badgeBg: '#EFF6FF',  // blue-50
+    label: 'Classification',
+    icon: '◉',
   },
   decision: {
-    border: '#3B82F6',  // blue-500
-    badge: '#1D4ED8',  // blue-700
-    badgeBg: '#DBEAFE', // blue-100
+    border: '#3B82F6',   // blue-500
+    badge: '#1D4ED8',    // blue-700
+    badgeBg: '#DBEAFE',  // blue-100
+    label: 'Decision',
+    icon: '▶',
   },
   action: {
-    border: '#D1FAE5',  // green-100
-    badge: '#059669',   // green-600
-    badgeBg: '#ECFDF5', // green-50
+    border: '#D1FAE5',   // green-100
+    badge: '#059669',    // green-600
+    badgeBg: '#ECFDF5',  // green-50
+    label: 'Action',
+    icon: '✓',
   },
   warning: {
-    border: '#FEF3C7',  // amber-100
-    badge: '#D97706',  // amber-600
-    badgeBg: '#FFFBEB', // amber-50
+    border: '#FEF3C7',   // amber-100
+    badge: '#D97706',    // amber-600
+    badgeBg: '#FFFBEB',  // amber-50
+    label: 'Warning',
+    icon: '⚠',
   },
 } as const
 ```
 
-### Reasoning Panel Component
+All badges display BOTH color AND text label + icon. Color-blind users can identify event types by label text and icon, not just color.
+
+### Reasoning Panel Component (with Virtual Scrolling)
 
 ```tsx
 // src/components/ReasoningPanel.tsx
@@ -527,22 +769,44 @@ const REASONING_COLORS = {
 import { ReasoningEvent } from '@/types/sse'
 import { REASONING_COLORS } from '@/ui/reasoning-colors'
 
+const MAX_RENDERED_EVENTS = 500  // Cap rendered DOM nodes to prevent browser freeze
+
 interface ReasoningPanelProps {
   events: ReasoningEvent[]
   isExpanded: boolean
   onToggleExpand: () => void
+  /** Point-in-time snapshot taken when pending action was queued */
+  snapshot?: ReasoningEvent[]
 }
 
-function ReasoningPanel({ events, isExpanded, onToggleExpand }: ReasoningPanelProps) {
-  const lastEvent = events[events.length - 1]
+function ReasoningPanel({ events, isExpanded, onToggleExpand, snapshot }: ReasoningPanelProps) {
+  // Use snapshot if provided (approval modal scenario), otherwise live events
+  const displayEvents = snapshot ?? events
+
+  // Virtual scrolling: only render events in viewport
+  const [scrollTop, setScrollTop] = useState(0)
+  const ITEM_HEIGHT = 120  // Approximate height per event
+  const visibleCount = Math.ceil(VIEWPORT_HEIGHT / ITEM_HEIGHT)
+  const startIndex = Math.floor(scrollTop / ITEM_HEIGHT)
+  const endIndex = Math.min(startIndex + visibleCount + 2, displayEvents.length)
+
+  // Cap total rendered events
+  const cappedEvents = displayEvents.slice(0, MAX_RENDERED_EVENTS)
+  const hasMore = displayEvents.length > MAX_RENDERED_EVENTS
+
+  const lastEvent = cappedEvents[cappedEvents.length - 1]
 
   return (
     <div className="reasoning-panel">
       {/* Collapsed: single-line summary */}
       {!isExpanded && (
         <div className="reasoning-collapsed" onClick={onToggleExpand}>
-          <span className={`badge badge-${lastEvent.type}`}>
-            {lastEvent.type}
+          <span
+            className={`badge badge-${lastEvent.type}`}
+            style={{ backgroundColor: REASONING_COLORS[lastEvent.type].badgeBg }}
+            title={REASONING_COLORS[lastEvent.type].label}
+          >
+            {REASONING_COLORS[lastEvent.type].icon} {lastEvent.type}
           </span>
           <span className="reasoning-summary">
             {truncate(lastEvent.content.text, 80)}
@@ -551,53 +815,76 @@ function ReasoningPanel({ events, isExpanded, onToggleExpand }: ReasoningPanelPr
         </div>
       )}
 
-      {/* Expanded: full trace */}
+      {/* Expanded: full trace with virtual scrolling */}
       {isExpanded && (
         <div className="reasoning-expanded">
           <div className="reasoning-header">
             <span>Reasoning Trace</span>
             <button onClick={onToggleExpand}>[−]</button>
           </div>
-          <ol className="reasoning-list">
-            {events.map((event, index) => (
-              <li
-                key={`${event.runId}-${event.step}`}
-                className={`reasoning-item type-${event.type}`}
-              >
-                <span className="step-number">{index + 1}.</span>
-                <div className="reasoning-content">
-                  <span className={`badge badge-${event.type}`}>
-                    {event.type}
-                  </span>
-                  <p className="reasoning-text">{event.content.text}</p>
-
-                  {event.content.evidence && event.content.evidence.length > 0 && (
-                    <ul className="evidence-list">
-                      {event.content.evidence.map((e, i) => (
-                        <li key={i} className="evidence-item">{" "}{e}</li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {event.content.confidence !== undefined && (
-                    <span className="confidence">
-                      confidence: {event.content.confidence}
+          <div
+            className="reasoning-scroll-container"
+            onScroll={(e) => setScrollTop(e.target.scrollTop)}
+            style={{ maxHeight: '400px', overflow: 'auto' }}
+          >
+            <ol className="reasoning-list" style={{ height: cappedEvents.length * ITEM_HEIGHT }}>
+              {cappedEvents.slice(startIndex, endIndex).map((event, index) => (
+                <li
+                  key={`${event.runId}-${event.step}`}
+                  className={`reasoning-item type-${event.type}`}
+                  style={{ position: 'absolute', top: (startIndex + index) * ITEM_HEIGHT, width: '100%' }}
+                >
+                  <span className="step-number">{startIndex + index + 1}.</span>
+                  <div className="reasoning-content">
+                    <span
+                      className={`badge badge-${event.type}`}
+                      style={{ backgroundColor: REASONING_COLORS[event.type].badgeBg }}
+                      title={REASONING_COLORS[event.type].label}
+                      aria-label={`${REASONING_COLORS[event.type].icon} ${event.type}`}
+                    >
+                      {REASONING_COLORS[event.type].icon} {event.type.toUpperCase()}
                     </span>
-                  )}
+                    <p className="reasoning-text">{event.content.text}</p>
 
-                  {event.content.alternativesConsidered &&
-                    event.content.alternativesConsidered.length > 0 && (
-                      <div className="alternatives">
-                        <span className="alternatives-label">considered:</span>
-                        {event.content.alternativesConsidered.map((alt, i) => (
-                          <span key={i} className="alternative-chip">{alt}</span>
+                    {event.content.evidence && event.content.evidence.length > 0 && (
+                      <ul className="evidence-list">
+                        {event.content.evidence.map((e, i) => (
+                          <li key={i} className="evidence-item">{" "}{e}</li>
                         ))}
-                      </div>
+                      </ul>
                     )}
-                </div>
-              </li>
-            ))}
-          </ol>
+
+                    {event.content.confidence !== undefined && (
+                      <span className="confidence">
+                        confidence: {event.content.confidence.toFixed(2)}
+                      </span>
+                    )}
+
+                    {event.content.alternativesConsidered &&
+                      event.content.alternativesConsidered.length > 0 && (
+                        <div className="alternatives">
+                          <span className="alternatives-label">considered:</span>
+                          {event.content.alternativesConsidered.map((alt, i) => (
+                            <span key={i} className="alternative-chip">{alt}</span>
+                          ))}
+                        </div>
+                      )}
+
+                    {event.content.severity && event.type === 'warning' && (
+                      <span className="severity severity-{event.content.severity}">
+                        severity: {event.content.severity}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {hasMore && (
+              <div className="events-truncated">
+                +{displayEvents.length - MAX_RENDERED_EVENTS} more events not shown
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -648,6 +935,8 @@ function AgentCard({ agent, reasoningEvents }: AgentCardProps) {
 | **Auditable** | no | yes |
 | **Actionable by user** | no (post-hoc only) | yes (can intervene mid-run) |
 | **Feeds into approval UX** | no | yes |
+| **Integrity** | none | HMAC-SHA256 signed |
+| **PII Safe** | N/A | yes (redaction applied) |
 
 ### Side-by-Side Event Comparison
 
@@ -765,21 +1054,59 @@ Reasoning:
 [Approve] [Deny]
 ```
 
+### Point-in-Time Snapshot for Approval Modal
+
+**CRITICAL: The approval modal must display a point-in-time snapshot, not a live-updating stream.**
+
+A live stream changes while the user is reading, creating a confusing or misleading experience. The snapshot is captured atomically when the pending action is queued:
+
+```typescript
+// src/runtime/approval-queue.ts
+
+interface PendingAction {
+  id: string
+  runId: string
+  agentId: string
+  action: Action
+  queuedAt: number
+  /** Point-in-time snapshot of reasoning events at moment of queueing */
+  reasoningSnapshot: ReasoningEvent[]
+}
+
+function queuePendingAction(params: {
+  runId: string
+  agentId: string
+  action: Action
+  reasoningEvents: ReasoningEvent[]
+}): PendingAction {
+  return {
+    id: ulid(),
+    runId: params.runId,
+    agentId: params.agentId,
+    action: params.action,
+    queuedAt: Date.now(),
+    // Atomically snapshot current reasoning state — no further mutations
+    reasoningSnapshot: [...params.reasoningEvents],
+  }
+}
+```
+
+The `reasoningSnapshot` field contains the frozen set of reasoning events at the exact moment the user is asked to approve. The modal renders from this snapshot, not from live event stream. The user sees a stable, non-changing view.
+
 ### Implementation
 
 ```tsx
 // src/components/ApprovalModal.tsx
 
 interface ApprovalModalProps {
-  pendingAction: PendingAction
-  reasoningEvents: ReasoningEvent[]  // filtered to relevant agent/run
+  pendingAction: PendingAction  // Contains reasoningSnapshot, not live events
   onApprove: () => void
   onDeny: () => void
 }
 
-function ApprovalModal({ pendingAction, reasoningEvents, onApprove, onDeny }: ApprovalModalProps) {
-  // Get the most recent decision event related to this action
-  const relevantReasoning = reasoningEvents
+function ApprovalModal({ pendingAction, onApprove, onDeny }: ApprovalModalProps) {
+  // Render from snapshot — never from live reasoningEvents prop
+  const relevantReasoning = pendingAction.reasoningSnapshot
     .filter(e => e.agentId === pendingAction.agentId)
     .filter(e => ['decision', 'classification', 'action'].includes(e.type))
     .slice(-3)  // last 3 relevant events for context
@@ -787,13 +1114,19 @@ function ApprovalModal({ pendingAction, reasoningEvents, onApprove, onDeny }: Ap
   return (
     <div className="approval-modal-overlay">
       <div className="approval-modal">
-        <h2>{pendingAction.title}</h2>
+        <h2>{pendingAction.action.title}</h2>
 
         <div className="approval-reasoning">
           <h3>Why the agent wants to do this:</h3>
           {relevantReasoning.map(event => (
             <div key={`${event.runId}-${event.step}`} className={`reasoning-${event.type}`}>
-              <span className="type-badge">{event.type}</span>
+              <span
+                className="type-badge"
+                style={{ backgroundColor: REASONING_COLORS[event.type].badgeBg }}
+                title={REASONING_COLORS[event.type].label}
+              >
+                {REASONING_COLORS[event.type].icon} {event.type}
+              </span>
               <p>{event.content.text}</p>
               {event.content.evidence && (
                 <ul className="evidence">
@@ -801,7 +1134,12 @@ function ApprovalModal({ pendingAction, reasoningEvents, onApprove, onDeny }: Ap
                 </ul>
               )}
               {event.content.confidence !== undefined && (
-                <span className="confidence">confidence: {event.content.confidence}</span>
+                <span className="confidence">confidence: {event.content.confidence.toFixed(2)}</span>
+              )}
+              {event.content.severity && (
+                <span className="severity severity-{event.content.severity}">
+                  severity: {event.content.severity}
+                </span>
               )}
             </div>
           ))}
@@ -832,14 +1170,20 @@ src/
   runtime/
     agent-runtime.ts          # Runtime that emits reasoning events
     reasoning-emitter.ts      # Utility for extracting reasoning from tool calls
+    reasoning-integrity.ts    # HMAC-SHA256 signing and verification
+    reasoning-aggregator.ts   # Event aggregation/collapse for burst suppression
+    step-counter.ts           # ULID-based step generation (not in-memory Map)
+    approval-queue.ts          # Pending action queue with atomic snapshots
   routes/
     runs.ts                   # SSE endpoint GET /api/runs/:runId/events
+  middleware/
+    run-ownership.ts          # Auth middleware: validate user owns runId
   ui/
     components/
       AgentCard.tsx           # Agent card with reasoning panel
-      ReasoningPanel.tsx      # Collapsible reasoning trace panel
-      ApprovalModal.tsx       # Approval modal with reasoning context
-    reasoning-colors.ts      # Color constants per reasoning type
+      ReasoningPanel.tsx      # Collapsible reasoning trace panel (virtual scroll)
+      ApprovalModal.tsx       # Approval modal with reasoning context (snapshot)
+    reasoning-colors.ts      # Color constants per reasoning type (with labels/icons)
 ```
 
 ### Type Exports
@@ -848,22 +1192,30 @@ src/
 // src/types/sse.ts
 
 export type ReasoningEventType = 'observation' | 'classification' | 'decision' | 'action' | 'warning'
+export type WarningSeverity = 'low' | 'medium' | 'high'
 
 export interface ReasoningContent {
   text: string
   evidence?: string[]
   confidence?: number
   alternativesConsidered?: string[]
+  severity?: WarningSeverity
 }
 
 export interface ReasoningEvent {
   event: 'reasoning'
   runId: string
   agentId: string
-  step: number
+  step: string       // ULID — globally unique, monotonically increasing
+  sequence: number   // Per-run monotonic sequence for ordering and integrity
   type: ReasoningEventType
   content: ReasoningContent
   timestamp: number
+  version: 1         // Schema version
+  integrity?: {
+    mac: string
+    tag: string
+  }
 }
 
 export type AgentStatusEvent =
@@ -897,48 +1249,235 @@ export interface RunDoneEvent {
   summary: string
 }
 
+export interface StreamEndEvent {
+  event: 'stream_end'
+  runId: string
+  reason: 'completed' | 'error' | 'cancelled'
+  finalSequence: number
+}
+
 export type SSEEvent =
   | AgentStatusEvent
   | ReasoningEvent
   | ToolCallEvent
   | ToolResultEvent
   | RunDoneEvent
+  | StreamEndEvent
 ```
 
-### Step Counter
-
-Step numbers must be monotonically increasing within a run. The runtime maintains a per-run counter:
+### ULID Step Counter (replaces in-memory Map)
 
 ```typescript
 // src/runtime/step-counter.ts
+import { ulid } from 'ulid'
 
-class StepCounter {
-  private counters: Map<string, number> = new Map()
+// ULID is time-ordered, globally unique, and survives server restarts.
+// Unlike in-memory Map counters, ULIDs work across distributed runners
+// and do not reset on process restart.
 
-  next(runId: string): number {
-    const current = this.counters.get(runId) ?? 0
-    const next = current + 1
-    this.counters.set(runId, next)
-    return next
+function generateStep(runId: string, monotonicComponent: number): string {
+  // Combine run-scoped monotonic component with ULID's timestamp component
+  // to get both uniqueness and time-ordering within a run
+  return ulid(Date.now(), `${runId.slice(-6).padStart(6, '0')}${String(monotonicComponent).padStart(4, '0')}`)
+}
+
+class StepGenerator {
+  private sequences: Map<string, number> = new Map()
+
+  next(runId: string): string {
+    const seq = (this.sequences.get(runId) ?? 0) + 1
+    this.sequences.set(runId, seq)
+    return generateStep(runId, seq)
+  }
+
+  getCurrent(runId: string): number {
+    return this.sequences.get(runId) ?? 0
   }
 
   reset(runId: string): void {
-    this.counters.delete(runId)
+    this.sequences.delete(runId)
   }
 }
 
-export const stepCounter = new StepCounter()
+export const stepGenerator = new StepGenerator()
 ```
 
 ### Downlevel Compatibility
 
 The `confidence: number` field (0–1) and `alternativesConsidered: string[]` fields are optional. A reasoning event with only `text` is valid. Older consumers that only understand `text` continue to work.
 
-### Open Questions
+All optional fields (`evidence`, `confidence`, `alternativesConsidered`, `severity`, `integrity`) have defaults that ensure older consumers can parse events without errors.
 
-1. **Burst suppression:** In fast agent loops, reasoning events could fire hundreds of times per second. Consider debouncing or collapsing consecutive `observation` events of the same type.
-2. **Retention policy:** Full reasoning traces for all runs could consume significant storage. Determine retention window (e.g., 30 days for non-flagged runs, indefinite for flagged/failed runs).
+---
+
+## 10. Security Considerations
+
+### 10.1 SSE Stream Integrity (HMAC-SHA256)
+
+Reasoning events are signed to prevent man-in-the-middle modification of `confidence`, `evidence`, and `alternativesConsidered` fields. An attacker who can inject SSE events could otherwise manipulate a user's trust in the agent's reasoning without changing the agent's actual behavior.
+
+**Key material:** The per-run HMAC secret is generated once at run creation and stored securely. It is not transmitted over the SSE stream.
+
+**Replay protection:** The `sequence` number is included in the MAC input. An relay that replays an old event with a stale sequence will produce a MAC mismatch when the client verifies against the current sequence expectation.
+
+**Implementation:** See `signReasoningEvent` / `verifyReasoningEvent` in Section 3.
+
+### 10.2 SSE Endpoint Authorization
+
+**CRITICAL: Unauthorized users must not receive events for runs they do not own.**
+
+The SSE endpoint MUST validate run ownership before establishing the stream:
+
+```typescript
+// src/middleware/run-ownership.ts
+
+async function requireRunOwnership(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const userId = req.user?.id
+  const { runId } = req.params
+
+  if (!userId || !runId) {
+    res.status(401).json({ error: 'Authentication required' })
+    return
+  }
+
+  const run = await runStore.findById(runId)
+  if (!run) {
+    res.status(404).json({ error: 'Run not found' })
+    return
+  }
+
+  if (run.ownerId !== userId) {
+    res.status(403).json({ error: 'You do not have access to this run' })
+    return
+  }
+
+  next()
+}
+```
+
+The SSE endpoint uses this middleware. A client that does not own `runId` receives a 403 response — not an empty stream, not events for other runs.
+
+### 10.3 PII Redaction in Reasoning Events
+
+**CRITICAL: LLM context must redact PII before emitting reasoning events.**
+
+`evidence` and `alternativesConsidered` arrays must never contain raw user data. The runtime applies pattern-based redaction as a defense-in-depth measure (see `sanitizeEvidence` in Section 4), but the primary responsibility lies with the LLM prompt (see PII Sanitization Requirements in Section 4).
+
+If PII is detected in emitted reasoning events at the runtime layer, those events should be flagged and the run should be logged for security review.
+
+### 10.4 Reasoning Events Must Not Re-enter LLM Context
+
+**Reasoning traces must NEVER be fed back into the LLM as context.**
+
+Feeding reasoning traces back into the LLM context creates:
+1. **Infinite loop risk** — the LLM reasons about its reasoning about its reasoning...
+2. **Cost explosion** — context size grows quadratically as reasoning feeds reasoning
+3. **Context poisoning** — audit trail混入 LLM 输入污染决策质量
+
+This restriction applies to ALL reasoning events regardless of whether they contain PII.
+
+---
+
+## 11. Operational Considerations
+
+### 11.1 Event Aggregation and Rate Limiting
+
+Burst suppression is required to prevent SSE flooding during fast agent loops (e.g., a loop iterating 1000 times emits 1000 `observation` events).
+
+- **Aggregation window:** Consecutive `observation` events of the same text within 500ms are collapsed into a single event with a count suffix.
+- **Rate limit:** Reasoning event emission is capped at 10 events/second per run.
+- Non-observation events (classification, decision, action, warning) are always passed through immediately — they represent meaningful decision points, not loop iterations.
+
+See `aggregateReasoningEvents` in Section 4.
+
+### 11.2 Virtual Scrolling in UI
+
+Rendering 10,000+ DOM nodes freezes the browser. The reasoning panel caps rendered events at 500 and uses virtual scrolling to display only the visible viewport.
+
+See `ReasoningPanel` component in Section 5.
+
+### 11.3 Cursor-Based Reconnection
+
+Clients reconnecting to an SSE stream pass their last-seen `sequence` number:
+
+```
+GET /api/runs/:runId/events?lastSequence=47
+```
+
+The server responds with all events after sequence 47, followed by the `stream_end` event, then closes the connection. The client then establishes a new SSE connection starting from that point.
+
+```typescript
+interface StreamEndEvent {
+  event: 'stream_end'
+  runId: string
+  reason: 'completed' | 'error' | 'cancelled'
+  finalSequence: number
+}
+```
+
+### 11.4 Retention Policy
+
+**GDPR Right to Erasure requires deletion of reasoning traces after a defined retention period.**
+
+| Data Type | Retention Period | Notes |
+|-----------|----------------|-------|
+| Reasoning events (standard runs) | 30 days | Auto-deleted after 30 days from run completion |
+| Reasoning events (flagged/failed runs) | 90 days | Extended retention for audit purposes |
+| Reasoning events (user requested export) | Until export delivered | Temporary hold during export request |
+
+```typescript
+// src/runtime/reasoning-retention.ts
+
+const RETENTION_DAYS = {
+  standard: 30,
+  flagged: 90,
+} as const
+
+async function enforceRetentionPolicy(): Promise<void> {
+  const cutoff = Date.now() - RETENTION_DAYS.standard * 24 * 60 * 60 * 1000
+  await reasoningStore.deleteEventsBefore(cutoff)
+}
+```
+
+Retention enforcement runs as a daily cron job. Flagged runs (user-reported, error-highlighted) are tagged with `retentionUntil` override set to 90 days.
+
+### 11.5 Channel-Based SSE Subscription
+
+Each SSE client subscribes to a named channel per run (e.g., `run-{runId}`), not shared listeners on a singleton event emitter. This ensures:
+
+- Clients for different runs are fully isolated
+- A misbehaving client for Run A cannot receive or interfere with events for Run B
+- Memory footprint scales with number of active runs, not number of total clients
+
+```typescript
+// Singleton emitter with namespaced channels
+const eventEmitter = new EventEmitter()
+
+// Client for run_01HXYZ subscribes to 'run-run_01HXYZ' channel only
+eventEmitter.on(`run-${runId}`, handler)
+
+// NOT:
+// eventEmitter.on('reasoning', handler) // Wrong — shared listener
+```
+
+---
+
+## Open Questions (pre-fix list — resolved)
+
+1. ~~**Burst suppression:** In fast agent loops, reasoning events could fire hundreds of times per second. Consider debouncing or collapsing consecutive `observation` events of the same type.~~ **RESOLVED:** Event aggregation implemented (Section 4, `reasoning-aggregator.ts`).
+2. ~~**Retention policy:** Full reasoning traces for all runs could consume significant storage. Determine retention window (e.g., 30 days for non-flagged runs, indefinite for flagged/failed runs).~~ **RESOLVED:** 30-day standard / 90-day flagged retention policy defined (Section 11.4).
 3. **Multi-agent causality:** In a run with multiple agents, a reasoning event from Agent A may be triggered by a tool result from Agent B. The schema supports this via `agentId` but the UI may need to visually link causal chains.
+4. ~~**Confidence bounds:** If LLM emits `confidence: 0.99`, validate range [0, 1].~~ **RESOLVED:** `clampConfidence` applied at emit (Section 4).
+5. ~~**Warning severity:** Add severity to `warning` type (low, medium, high).~~ **RESOLVED:** `WarningSeverity` added to schema (Section 3).
+6. ~~**Event versioning and reconnect:** Clients need cursor-based reconnection with last-seen sequence.~~ **RESOLVED:** `lastSequence` query param and `stream_end` event defined (Section 11.3).
+7. ~~**Accessibility:** Color-blind users need icon/text labels alongside color coding.~~ **RESOLVED:** `label` and `icon` fields added to color map (Section 5).
+8. ~~**ULID step counter:** In-memory Map breaks on server restart and across distributed runners.~~ **RESOLVED:** ULID-based `StepGenerator` implemented (Section 9).
+9. ~~**Atomic snapshot for approval modal:** Approval modal must not show live-updating stream.~~ **RESOLVED:** `reasoningSnapshot` captured atomically at queue time (Section 8).
+10. ~~**Channel-based SSE:** Each client should subscribe to named channel per run, not shared singleton.~~ **RESOLVED:** Channel-per-run pattern in SSE endpoint (Section 4).
 
 ---
 

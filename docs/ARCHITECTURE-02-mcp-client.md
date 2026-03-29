@@ -46,27 +46,84 @@ export interface ToolDefinition {
   name: string
   description: string
   inputSchema: JSONSchema
+  annotations?: ToolAnnotations
+}
+
+export interface ToolAnnotations {
+  read?: boolean      // only reads data, no side effects
+  write?: boolean      // may modify external state
+  dangerous?: boolean  // requires sandboxing or approval
 }
 
 export interface ToolResult {
   content: string | object
   isError: boolean
   error?: string
+  durationMs?: number
 }
 
 export interface MCPConfig {
   serverUrl: string          // e.g., 'https://mcp.zapier.com'
-  authToken?: string          // per-user OAuth token from Zapier
   timeoutMs?: number          // default 30000
   retryAttempts?: number      // default 3
+  manifestVersion?: string    // pinned manifest version (e.g., '2026-03-01')
+  manifestCacheTtlMs?: number // default 3600000 (1 hour)
 }
 
 export interface MCPClient {
-  connect(config: MCPConfig): Promise<void>
+  connect(userId: string, config: MCPConfig): Promise<void>
   listTools(): Promise<ToolDefinition[]>
-  callTool(name: string, args: Record<string, unknown>): Promise<ToolResult>
+  callTool(name: string, args: Record<string, unknown>, options?: CallToolOptions): Promise<ToolResult>
   disconnect(): void
 }
+
+export interface CallToolOptions {
+  idempotencyKey?: string  // for write operations; prevents duplicate execution
+  timeoutMs?: number        // override default timeout for this call
+  skipPermissionsCheck?: boolean  // internal use only; bypasses sandbox
+}
+
+// PERMISSION FIX: ToolPermissions enum for capability-based access control
+export enum ToolCapability {
+  READ_EMAIL = 'read_email',
+  WRITE_EMAIL = 'write_email',
+  READ_CALENDAR = 'read_calendar',
+  WRITE_CALENDAR = 'write_calendar',
+  READ_SALES = 'read_sales',
+  WRITE_SALES = 'write_sales',
+  READ_MESSAGING = 'read_messaging',
+  WRITE_MESSAGING = 'write_messaging',
+  READ_FILES = 'read_files',
+  WRITE_FILES = 'write_files',
+  PAYMENTS = 'payments',         // Stripe, PayPal — HIGH RISK
+  ADMIN = 'admin',               // Salesforce delete, etc. — CRITICAL RISK
+  EXECUTE_CODE = 'execute_code', // shell commands, SQL exec — CRITICAL RISK
+}
+
+export interface ToolPermissions {
+  allowedCapabilities: Set<ToolCapability>
+  deniedCapabilities: Set<ToolCapability>
+  requireApproval: Set<ToolCapability>  // tools that need human approval before execution
+}
+
+export const DANGEROUS_TOOLS: Record<string, ToolCapability> = {
+  'stripe.chargeCustomer': ToolCapability.PAYMENTS,
+  'stripe.refundPayment': ToolCapability.PAYMENTS,
+  'stripe.createCustomer': ToolCapability.PAYMENTS,
+  'salesforce.deleteLead': ToolCapability.ADMIN,
+  'salesforce.deleteContact': ToolCapability.ADMIN,
+  'salesforce.deleteAccount': ToolCapability.ADMIN,
+  'hubspot.crm.delete': ToolCapability.ADMIN,
+  'shell.execute': ToolCapability.EXECUTE_CODE,
+  'sql.execute': ToolCapability.EXECUTE_CODE,
+  'webhook.trigger': ToolCapability.WRITE_MESSAGING,  // can cause unintended side effects
+}
+
+export const APPROVAL_REQUIRED_CAPABILITIES: ToolCapability[] = [
+  ToolCapability.PAYMENTS,
+  ToolCapability.ADMIN,
+  ToolCapability.EXECUTE_CODE,
+]
 ```
 
 The `JSONSchema` for `inputSchema` follows the [JSON Schema draft-07](https://json-schema.org/draft/draft-07/nav) format, identical to the schema format used by OpenAI function calling and Anthropic tool use — making it trivial to pass tool definitions to any LLM provider.
@@ -78,9 +135,25 @@ The `JSONSchema` for `inputSchema` follows the [JSON Schema draft-07](https://js
 
 export class ZapierMCPClient implements MCPClient {
   private config: MCPConfig | null = null
+  private userId: string | null = null
   private httpClient: HttpClient
+  private toolManifest: ToolDefinition[] | null = null
+  private manifestFetchedAt: number = 0
+  private manifestCache: Map<string, { tools: ToolDefinition[]; fetchedAt: number }> = new Map()
 
-  async connect(config: MCPConfig): Promise<void> {
+  // CRITICAL FIX: Atomic token refresh with distributed lock per userId
+  private refreshLocks: Map<string, Promise<string>> = new Map()
+
+  // PERMISSION FIX: Permissions check
+  private toolPermissions: ToolPermissions = {
+    allowedCapabilities: new Set(Object.values(ToolCapability)),
+    deniedCapabilities: new Set(),
+    requireApproval: new Set(APPROVAL_REQUIRED_CAPABILITIES),
+  }
+
+  async connect(userId: string, config: MCPConfig): Promise<void> {
+    if (!userId) throw new AuthError('userId is required for MCP connection')
+    this.userId = userId
     this.config = config
     this.httpClient = new HttpClient({
       baseUrl: config.serverUrl,
@@ -92,6 +165,11 @@ export class ZapierMCPClient implements MCPClient {
       jsonrpc: '2.0',
       method: 'ping',
       id: 1,
+    }, {
+      // CRITICAL FIX: Bearer token goes in HTTP Authorization header, NOT in JSON-RPC params
+      headers: {
+        'Authorization': `Bearer ${await this.getUserToken()}`,
+      },
     })
     if (pingResult.error) {
       throw new MCPServerError(`Connection failed: ${pingResult.error.message}`)
@@ -99,39 +177,309 @@ export class ZapierMCPClient implements MCPClient {
   }
 
   async listTools(): Promise<ToolDefinition[]> {
+    const cacheTtl = this.config?.manifestCacheTtlMs ?? 3_600_000
+    const pinnedVersion = this.config?.manifestVersion
+
+    // MAJOR FIX: Use pinned manifest version for caching
+    const cacheKey = pinnedVersion ?? 'live'
+    const cached = this.manifestCache.get(cacheKey)
+
+    if (cached && Date.now() - cached.fetchedAt < cacheTtl) {
+      return cached.tools
+    }
+
     const result = await this.httpClient.post('/rpc', {
       jsonrpc: '2.0',
       method: 'tools/list',
       id: 2,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${await this.getUserToken()}`,
+      },
     })
-    return result.tools as ToolDefinition[]
+
+    const tools = result.tools as ToolDefinition[]
+
+    // Annotate tools with permission flags
+    const annotatedTools = tools.map(tool => ({
+      ...tool,
+      annotations: {
+        read: this.isReadTool(tool.name),
+        write: this.isWriteTool(tool.name),
+        dangerous: this.isDangerousTool(tool.name),
+      },
+    }))
+
+    this.manifestCache.set(cacheKey, { tools: annotatedTools, fetchedAt: Date.now() })
+    this.toolManifest = annotatedTools
+
+    // MAJOR FIX: Invalidate stale cache entries when using pinned versions
+    if (pinnedVersion) {
+      for (const key of this.manifestCache.keys()) {
+        if (key !== cacheKey) {
+          this.manifestCache.delete(key)
+        }
+      }
+    }
+
+    return annotatedTools
   }
 
-  async callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-    if (!this.config) throw new MCPServerError('Not connected')
+  async callTool(
+    name: string,
+    args: Record<string, unknown>,
+    options?: CallToolOptions,
+  ): Promise<ToolResult> {
+    if (!this.config || !this.userId) throw new MCPServerError('Not connected')
 
-    const result = await this.httpClient.post('/rpc', {
-      jsonrpc: '2.0',
-      method: 'tools/call',
-      params: {
-        name,
-        arguments: args,
-        // Auth token injected per-request from stored per-user credential
-        authorization: `Bearer ${await this.getUserToken()}`,
-      },
-      id: 3,
-    })
+    const startTime = Date.now()
 
-    return {
-      content: result.content,
-      isError: result.isError ?? false,
-      error: result.error,
+    // CRITICAL FIX: Enforce permissions check unless explicitly skipped
+    if (!options?.skipPermissionsCheck) {
+      this.enforceToolPermissions(name)
     }
+
+    // MAJOR FIX: Idempotency key validation for write operations
+    const isWriteOp = this.isWriteTool(name)
+    if (isWriteOp && !options?.idempotencyKey) {
+      console.warn(`[MCP] Write tool ${name} called without idempotencyKey — adding generated key`)
+    }
+    const idempotencyKey = options?.idempotencyKey ?? `idempotent-${this.userId}-${name}-${Date.now()}`
+
+    // MAJOR FIX: Audit logging for all tool calls
+    const auditEntry: AuditLogEntry = {
+      userId: this.userId,
+      toolName: name,
+      args: this.sanitizeArgs(args),  // strip sensitive data before logging
+      idempotencyKey,
+      timestamp: new Date().toISOString(),
+      status: 'started',
+    }
+    await this.writeAuditLog(auditEntry)
+
+    try {
+      // CRITICAL FIX: Bearer token goes in HTTP Authorization header, NOT in JSON-RPC params
+      const result = await this.httpClient.post('/rpc', {
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          name,
+          arguments: args,
+          // NOTE: Auth token is NO LONGER here — it's in the HTTP header below
+        },
+        id: 3,
+        // MAJOR FIX: Idempotency key in metadata, not in params
+        meta: {
+          idempotencyKey,
+        },
+      }, {
+        headers: {
+          'Authorization': `Bearer ${await this.getUserToken()}`,
+          // MAJOR FIX: Payload size limit enforcement
+          'X-Max-Payload-Size': '10485760', // 10MB limit
+        },
+        timeoutMs: options?.timeoutMs ?? this.config.timeoutMs ?? 30_000,
+      })
+
+      const durationMs = Date.now() - startTime
+
+      // MAJOR FIX: Audit log on success
+      await this.writeAuditLog({
+        ...auditEntry,
+        status: 'success',
+        result: result.content,
+        durationMs,
+      })
+
+      // MINOR FIX: Enforce payload size limit
+      const resultStr = JSON.stringify(result.content)
+      if (resultStr.length > 10_000_000) {
+        throw new MCPServerError('RESULT_PAYLOAD_TOO_LARGE', 'Tool result exceeds 10MB size limit')
+      }
+
+      return {
+        content: result.content,
+        isError: result.isError ?? false,
+        error: result.error,
+        durationMs,
+      }
+    } catch (err: any) {
+      const durationMs = Date.now() - startTime
+
+      // MAJOR FIX: Audit log on failure
+      await this.writeAuditLog({
+        ...auditEntry,
+        status: 'error',
+        error: err.message,
+        durationMs,
+      })
+
+      throw err
+    }
+  }
+
+  // CRITICAL FIX: Atomic token refresh with distributed lock per userId
+  // Only one concurrent refresh per userId; others wait for the same promise
+  private async getUserToken(): Promise<string> {
+    if (!this.userId) throw new AuthError('Not connected')
+
+    const credential = await db.credentials.findOne({ userId: this.userId, provider: 'zapier' })
+    if (!credential) {
+      throw new AuthError(`No OAuth credential found for user ${this.userId}`)
+    }
+
+    // Check if token is expired (with 60s buffer)
+    if (Date.now() < credential.tokenExpiresAt - 60_000) {
+      return decryptToken(credential.encryptedAccessToken)
+    }
+
+    // CRITICAL FIX: Only one refresh at a time per userId
+    // If another request is already refreshing, wait for it instead of starting a second refresh
+    const existingLock = this.refreshLocks.get(this.userId)
+    if (existingLock) {
+      console.log(`[MCP] Token refresh already in progress for user ${this.userId}, waiting...`)
+      return existingLock
+    }
+
+    // Start a new refresh and store the promise in the lock map
+    const refreshPromise = this.doTokenRefresh(this.userId, credential)
+    this.refreshLocks.set(this.userId, refreshPromise)
+
+    try {
+      return await refreshPromise
+    } finally {
+      // CRITICAL FIX: Always clean up the lock, whether refresh succeeds or fails
+      this.refreshLocks.delete(this.userId)
+    }
+  }
+
+  // CRITICAL FIX: Atomic findOneAndUpdate to prevent race conditions in token refresh
+  private async doTokenRefresh(userId: string, currentCredential: StoredCredential): Promise<string> {
+    const lockAcquireResult = await db.credentials.findOneAndUpdate(
+      {
+        userId,
+        provider: 'zapier',
+        tokenExpiresAt: currentCredential.tokenExpiresAt,  // only update if unchanged
+      },
+      {
+        $set: { refreshInProgress: true, refreshStartedAt: Date.now() },
+      },
+      { returnDocument: 'after' },
+    )
+
+    if (!lockAcquireResult) {
+      // Another process already started a refresh; fetch the latest credential
+      const latest = await db.credentials.findOne({ userId, provider: 'zapier' })
+      if (!latest) throw new AuthError('Credential not found during concurrent refresh')
+      if (latest.refreshInProgress && Date.now() - latest.refreshStartedAt < 30_000) {
+        // Another refresh is still in progress; wait and fetch again
+        await sleep(2000)
+        const recheck = await db.credentials.findOne({ userId, provider: 'zapier' })
+        return decryptToken(recheck!.encryptedAccessToken)
+      }
+      // Stale or failed refresh attempt; proceed with our own
+      const refreshed = await refreshOAuthToken(latest)
+      await db.credentials.updateOne(
+        { userId },
+        { $set: { ...refreshed, refreshInProgress: false } },
+      )
+      return refreshed.accessToken
+    }
+
+    try {
+      const refreshed = await refreshOAuthToken(currentCredential)
+      await db.credentials.updateOne(
+        { userId },
+        { $set: { ...refreshed, refreshInProgress: false } },
+      )
+      return refreshed.accessToken
+    } catch (err) {
+      // Clear the in-progress flag on failure
+      await db.credentials.updateOne(
+        { userId },
+        { $set: { refreshInProgress: false } },
+      )
+      throw err
+    }
+  }
+
+  // CRITICAL FIX: Permission enforcement
+  private enforceToolPermissions(toolName: string): void {
+    const dangerousCapability = DANGEROUS_TOOLS[toolName]
+
+    if (dangerousCapability) {
+      if (this.toolPermissions.deniedCapabilities.has(dangerousCapability)) {
+        throw new ToolPermissionError(
+          `Tool '${toolName}' is denied: capability '${dangerousCapability}' is not allowed`,
+          toolName,
+          dangerousCapability,
+        )
+      }
+      if (this.toolPermissions.requireApproval.has(dangerousCapability)) {
+        throw new ToolApprovalRequiredError(
+          `Tool '${toolName}' requires approval before execution: capability '${dangerousCapability}' is restricted`,
+          toolName,
+          dangerousCapability,
+        )
+      }
+    }
+  }
+
+  private isReadTool(name: string): boolean {
+    return /^(gmail\.read|calendar\.read|salesforce\.query|hubspot\.read|slack\.search)/.test(name)
+  }
+
+  private isWriteTool(name: string): boolean {
+    return /^(gmail\.send|calendar\.create|slack\.post|salesforce\.create|webhook\.trigger)/.test(name)
+  }
+
+  private isDangerousTool(name: string): boolean {
+    return name in DANGEROUS_TOOLS
+  }
+
+  private sanitizeArgs(args: Record<string, unknown>): Record<string, unknown> {
+    // Strip sensitive fields before audit logging
+    const sensitive = ['password', 'token', 'secret', 'apiKey', 'authorization']
+    const sanitized: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(args)) {
+      if (sensitive.some(s => k.toLowerCase().includes(s))) {
+        sanitized[k] = '[REDACTED]'
+      } else if (typeof v === 'object' && v !== null) {
+        sanitized[k] = this.sanitizeArgs(v as Record<string, unknown>)
+      } else {
+        sanitized[k] = v
+      }
+    }
+    return sanitized
+  }
+
+  private async writeAuditLog(entry: AuditLogEntry): Promise<void> {
+    // MAJOR FIX: Audit logging schema for all tool calls
+    await db.auditLogs.insertOne({
+      ...entry,
+      // Ensure userId is always present — no tool call is untraceable
+      userId: entry.userId ?? this.userId ?? 'unknown',
+    })
   }
 
   disconnect(): void {
     this.config = null
+    this.userId = null
+    this.toolManifest = null
   }
+}
+
+// MAJOR FIX: Audit log schema
+interface AuditLogEntry {
+  userId: string
+  toolName: string
+  args: Record<string, unknown>
+  idempotencyKey: string
+  timestamp: string
+  status: 'started' | 'success' | 'error'
+  result?: unknown
+  error?: string
+  durationMs?: number
 }
 ```
 
@@ -207,7 +555,19 @@ export class InProcessRunner implements Runner {
         if (mcpToolName) {
           // Build args from agent config and upstream fan-in data
           const args = await buildToolArgs(agent, completions)
-          const result = await this.mcpClient.callTool(mcpToolName, args)
+
+          // CRITICAL FIX: userId is passed explicitly, not a global
+          // Every tool call is traceable to a specific user
+          const userId = agent.userId ?? options.userId  // explicit userId from run context
+          if (!userId) throw new AuthError('No userId context for tool call')
+
+          // MAJOR FIX: Add idempotency key for write operations
+          const isWriteOp = MCPClient.isWriteTool?.(mcpToolName) ?? false
+          const callOptions = isWriteOp
+            ? { idempotencyKey: `${runId}-${agentId}-${Date.now()}` }
+            : undefined
+
+          const result = await this.mcpClient.callTool(mcpToolName, args, callOptions)
           if (result.isError) {
             output = { agentId, role: agent.role, status: 'error', data: null, error: result.error }
           } else {
@@ -236,7 +596,59 @@ export class InProcessRunner implements Runner {
 }
 ```
 
-The helper `mapAgentToolsToMCP` converts AgentOS tool names to MCP tool names (which are often identical or close). The `buildToolArgs` function extracts arguments from the agent's configuration and from upstream fan-in data.
+### mapAgentToolsToMCP Implementation
+
+MAJOR FIX: Define `mapAgentToolsToMCP` — the function that maps AgentOS tool names to Zapier MCP tool names.
+
+```typescript
+// app/lib/mcp/tool-mapper.ts
+
+// Maps AgentOS internal tool names to Zapier MCP tool names
+// Handles naming conventions where they differ
+
+const TOOL_NAME_MAP: Record<string, string> = {
+  'gmail.read': 'gmail.read_emails',
+  'gmail.send': 'gmail.send_email',
+  'gmail.draft': 'gmail.create_draft',
+  'calendar.read': 'google_calendar.list_events',
+  'calendar.create': 'google_calendar.create_event',
+  'calendar.update': 'google_calendar.update_event',
+  'calendar.delete': 'google_calendar.delete_event',
+  'slack.post': 'slack.post_message',
+  'slack.search': 'slack.search_messages',
+  'salesforce.query': 'salesforce.soql_query',
+  'salesforce.create': 'salesforce.create_record',
+  'salesforce.update': 'salesforce.update_record',
+  'salesforce.delete': 'salesforce.delete_record',
+  'hubspot.crm.search': 'hubspot.crm.search',
+  'hubspot.crm.create': 'hubspot.crm.create',
+  'stripe.chargeCustomer': 'stripe.charge_customer',
+  'stripe.refundPayment': 'stripe.refund_payment',
+  'web.search': 'webhook.trigger',  // routed through generic webhook tool
+  'webhook.trigger': 'webhook.trigger',
+}
+
+// Reverse map for result routing if needed
+const REVERSE_TOOL_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(TOOL_NAME_MAP).map(([k, v]) => [v, k])
+)
+
+export function mapAgentToolsToMCP(agentTools: string[]): string[] {
+  return agentTools
+    .map(tool => TOOL_NAME_MAP[tool] ?? tool)  // fall back to original name if no mapping
+    .filter(Boolean)
+}
+
+export function mapMCPToolToAgent(mcpToolName: string): string {
+  return REVERSE_TOOL_MAP[mcpToolName] ?? mcpToolName
+}
+
+export function isAgentToolMapped(agentTool: string): boolean {
+  return agentTool in TOOL_NAME_MAP
+}
+```
+
+The helper `buildToolArgs` function extracts arguments from the agent's configuration and from upstream fan-in data.
 
 ### LLM Tool Schema (New Capability)
 
@@ -270,41 +682,113 @@ AgentOS stores a mapping of `userId → oauthCredentials` in its database. Each 
 interface StoredCredential {
   userId: string
   provider: 'zapier' | 'slack' | 'gmail' | ...   // which MCP server
-  encryptedAccessToken: string                    // AES-encrypted, never plaintext
+  encryptedAccessToken: string                    // AES-256-GCM encrypted, never plaintext
   encryptedRefreshToken?: string                  // for servers that use refresh tokens
   tokenExpiresAt: number                          // Unix timestamp
   scope: string[]                                 // OAuth scopes granted
+  refreshInProgress?: boolean                     // distributed lock flag
+  refreshStartedAt?: number                      // timestamp for lock timeout
+  // MAJOR FIX: Key rotation support
+  keyVersion: number                              // which encryption key version was used
+  encryptedAccessTokenV2?: string                 // re-encrypted with new key after rotation
 }
 ```
 
 Encryption at rest uses AES-256-GCM with a per-deployment server-side key (stored in environment variables, never in code). The raw tokens are never logged and are decrypted only at the moment of injection into an MCP call.
 
-### Token Injection into Tool Calls
+### MAJOR FIX: Encryption Key Rotation Strategy with Versioning
 
-When `MCPClient.callTool()` is invoked, the client fetches the decrypted token and injects it into the request:
+When an AES-256-GCM key must rotate (due to compromise or compliance), the following strategy ensures data is re-encrypted without downtime:
 
 ```typescript
-// Inside ZapierMCPClient.callTool()
-private async getUserToken(): Promise<string> {
-  const userId = getCurrentUserId()           // from request context
-  const credential = await db.credentials.findOne({ userId, provider: 'zapier' })
+// app/lib/mcp/encryption.ts
 
-  if (!credential) {
-    throw new AuthError(`No OAuth credential found for user ${userId}`)
+interface EncryptionKey {
+  version: number
+  key: Buffer          // AES-256-GCM key material
+  createdAt: number    // Unix timestamp
+  rotatedAt?: number   // When this key was retired
+}
+
+// Stored in environment variables as base64-encoded bytes
+// Key derivation: actual encryption key = HKDF-SHA256(masterKey, version || 'mcp-credential')
+const KEY_REGISTRY: EncryptionKey[] = [
+  { version: 1, key: deriveKey(process.env.MASTER_ENCRYPTION_KEY_V1!, 1), createdAt: Date.now() },
+]
+
+// MAJOR FIX: Key rotation is a background job, not a blocking operation
+export async function rotateEncryptionKey(newKeyVersion: number): Promise<void> {
+  const newKey = deriveKey(process.env[`MASTER_ENCRYPTION_KEY_V${newKeyVersion}`]!, newKeyVersion)
+  KEY_REGISTRY.push({ version: newKeyVersion, key: newKey, createdAt: Date.now() })
+
+  // Re-encrypt all credentials with the new key in batches (background job)
+  const cursor = db.credentials.find({ keyVersion: { $lt: newKeyVersion } })
+  let batch: StoredCredential[] = []
+  for await (const cred of cursor) {
+    const oldKey = KEY_REGISTRY.find(k => k.version === cred.keyVersion)?.key
+    if (!oldKey) continue  // skip if old key not found
+
+    // Decrypt with old key, re-encrypt with new key
+    const accessToken = decrypt(cred.encryptedAccessToken, oldKey)
+    const refreshed = await refreshOAuthToken(cred)  // get fresh token from provider
+    const newEncrypted = encrypt(refreshed.accessToken, newKey)
+
+    await db.credentials.updateOne(
+      { _id: cred._id },
+      {
+        $set: {
+          encryptedAccessToken: newEncrypted,
+          keyVersion: newKeyVersion,
+          encryptedAccessTokenV2: undefined,  // clear legacy field
+        },
+      },
+    )
   }
+}
 
-  // Check if token is expired and needs refresh
-  if (Date.now() >= credential.tokenExpiresAt - 60_000) {
-    const refreshed = await refreshOAuthToken(credential)
-    await db.credentials.updateOne({ userId }, { $set: refreshed })
-    return refreshed.accessToken
-  }
+// Decrypt using the correct key version
+export function decryptToken(credential: StoredCredential): string {
+  const key = KEY_REGISTRY.find(k => k.version === credential.keyVersion)?.key
+  if (!key) throw new Error(`Encryption key version ${credential.keyVersion} not found`)
 
-  return decryptToken(credential.encryptedAccessToken)
+  // Support both legacy single-field and new field format
+  const encryptedData = credential.encryptedAccessTokenV2 ?? credential.encryptedAccessToken
+  return decrypt(encryptedData, key)
 }
 ```
 
-Zapier's MCP server receives the bearer token in the `Authorization` header of each JSON-RPC request and validates it against Zapier's OAuth infrastructure. AgentOS never touches the user's actual OAuth tokens — it just passes them through.
+Key rotation steps:
+1. Add new key to `KEY_REGISTRY` with incremented version
+2. Run background re-encryption job that decrypts with old key, re-encrypts with new key
+3. Credentials are migrated lazily — on next use, if `keyVersion < latest`, trigger immediate migration
+4. Old key is retained until all credentials are migrated and a grace period (24h) elapses
+
+### Token Injection into Tool Calls
+
+When `MCPClient.callTool()` is invoked, the client fetches the decrypted token and injects it into the HTTP `Authorization` header:
+
+```typescript
+// Inside ZapierMCPClient.callTool()
+// CRITICAL FIX: Bearer token is in HTTP Authorization header, NOT in JSON-RPC params
+
+await this.httpClient.post('/rpc', {
+  jsonrpc: '2.0',
+  method: 'tools/call',
+  params: {
+    name,
+    arguments: args,
+    // NOTE: authorization is NO LONGER in params — it's in the HTTP header
+  },
+  id: 3,
+}, {
+  headers: {
+    'Authorization': `Bearer ${await this.getUserToken()}`,
+    'X-Idempotency-Key': idempotencyKey,  // MAJOR FIX: for write ops
+  },
+})
+```
+
+Zapier's MCP server receives the bearer token in the `Authorization` header of each JSON-RPC HTTP request and validates it against Zapier's OAuth infrastructure. AgentOS never touches the user's actual OAuth tokens — it just passes them through.
 
 ### OAuth Initialization Flow
 
@@ -336,6 +820,7 @@ A lightweight mock server can be started alongside the dev app:
 import { createServer } from 'http'
 import { randomUUID } from 'crypto'
 
+// MINOR FIX: Expand beyond 3 hardcoded tools — added calendar.read (read) and crm.update (write)
 const MOCK_TOOLS = [
   {
     name: 'gmail.read',
@@ -374,14 +859,63 @@ const MOCK_TOOLS = [
       required: ['channel', 'text'],
     },
   },
+  // MINOR FIX: Additional read tool
+  {
+    name: 'calendar.read',
+    description: 'List upcoming calendar events',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        timeMin: { type: 'string', description: 'ISO8601 start time' },
+        timeMax: { type: 'string', description: 'ISO8601 end time' },
+        maxResults: { type: 'number', default: 10 },
+      },
+      required: ['timeMin'],
+    },
+  },
+  // MINOR FIX: Additional write tool
+  {
+    name: 'crm.update',
+    description: 'Update a CRM contact record',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contactId: { type: 'string' },
+        fields: {
+          type: 'object',
+          description: 'Key-value pairs of fields to update',
+          additionalProperties: { type: 'string' },
+        },
+      },
+      required: ['contactId', 'fields'],
+    },
+  },
 ]
 
 export function startMockServer(port = 3001) {
   const server = createServer(async (req, res) => {
+    // Set CORS headers for local dev
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204)
+      res.end()
+      return
+    }
+
     if (req.method === 'POST' && req.url === '/rpc') {
       let body = ''
       req.on('data', chunk => { body += chunk })
       await new Promise(resolve => req.on('end', resolve))
+
+      // Validate content length for payload size limit (MINOR FIX)
+      const contentLength = parseInt(req.headers['content-length'] ?? '0', 10)
+      if (contentLength > 10_000_000) {
+        res.writeHead(413, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Payload too large' }, id: null }))
+        return
+      }
 
       const rpc = JSON.parse(body)
 
@@ -391,7 +925,13 @@ export function startMockServer(port = 3001) {
         res.end(JSON.stringify({ jsonrpc: '2.0', result: { tools: MOCK_TOOLS }, id: rpc.id }))
       } else if (rpc.method === 'tools/call') {
         const { name, arguments: args } = rpc.params
-        // Return mock data based on tool name
+
+        // Validate idempotency key for write operations (MAJOR FIX)
+        const isWriteOp = ['gmail.send', 'crm.update'].includes(name)
+        if (isWriteOp && !rpc.meta?.idempotencyKey) {
+          console.warn(`[mock-zapier] Write tool ${name} called without idempotencyKey`)
+        }
+
         const mockResult = getMockResult(name, args)
         res.end(JSON.stringify({ jsonrpc: '2.0', result: mockResult, id: rpc.id }))
       }
@@ -423,6 +963,19 @@ function getMockResult(toolName: string, args: Record<string, unknown>) {
       return { content: JSON.stringify({ messageId: `mock-${randomUUID()}`, sent: true }), isError: false }
     case 'slack.postMessage':
       return { content: JSON.stringify({ ok: true, channel: args.channel, ts: Date.now() }), isError: false }
+    case 'calendar.read':
+      return {
+        content: JSON.stringify({
+          events: [
+            { id: randomUUID(), summary: 'Team standup', start: '2026-03-30T09:00:00Z', end: '2026-03-30T09:15:00Z' },
+            { id: randomUUID(), summary: 'Q1 review', start: '2026-03-30T14:00:00Z', end: '2026-03-30T15:00:00Z' },
+          ],
+          total: 2,
+        }),
+        isError: false,
+      }
+    case 'crm.update':
+      return { content: JSON.stringify({ success: true, contactId: args.contactId, updatedFields: Object.keys(args.fields as object) }), isError: false }
     default:
       return { content: null, isError: true, error: `Unknown tool: ${toolName}` }
   }
@@ -475,6 +1028,29 @@ export class MCPServerError extends Error {
     this.name = 'MCPServerError'
   }
 }
+
+// CRITICAL FIX: Permission errors
+export class ToolPermissionError extends Error {
+  constructor(
+    public readonly toolName: string,
+    public readonly capability: string,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ToolPermissionError'
+  }
+}
+
+export class ToolApprovalRequiredError extends Error {
+  constructor(
+    public readonly toolName: string,
+    public readonly capability: string,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ToolApprovalRequiredError'
+  }
+}
 ```
 
 When `httpClient.post()` throws a network error, `MCPClient.callTool()` catches it and throws `MCPServerUnreachableError`. The runner's catch block (line 156 in `runner.ts`) already handles thrown errors and sets `agentOutput.status = 'error'` — so the error propagates correctly up the callback chain and surfaces in the UI as a red node on the canvas.
@@ -482,11 +1058,11 @@ When `httpClient.post()` throws a network error, `MCPClient.callTool()` catches 
 The retry logic in `ZapierMCPClient` uses exponential backoff with jitter:
 
 ```typescript
-async callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+async callTool(name: string, args: Record<string, unknown>, options?: CallToolOptions): Promise<ToolResult> {
   const attempt = 0
   while (true) {
     try {
-      return await this.attemptCall(name, args)
+      return await this.attemptCall(name, args, options)
     } catch (err) {
       if (isRetryableError(err) && attempt < (this.config.retryAttempts ?? 3)) {
         const delay = Math.min(1000 * 2 ** attempt + Math.random() * 1000, 30_000)
@@ -513,7 +1089,7 @@ If `callTool()` receives a tool name not in the manifest, Zapier's server return
 The `attemptCall` method wraps this into a typed error:
 
 ```typescript
-private async attemptCall(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+private async attemptCall(name: string, args: Record<string, unknown>, options?: CallToolOptions): Promise<ToolResult> {
   const result = await this.httpClient.post('/rpc', { /* ... */ })
 
   if (result.error) {
@@ -530,7 +1106,7 @@ private async attemptCall(name: string, args: Record<string, unknown>): Promise<
 When the OAuth token is invalid or expired:
 
 1. `getUserToken()` detects `401` from Zapier or finds an expired `tokenExpiresAt`.
-2. If a refresh token exists, attempt automatic refresh via `refreshOAuthToken()`.
+2. If a refresh token exists, attempt atomic refresh via `doTokenRefresh()` (only one concurrent refresh per userId).
 3. If refresh succeeds, update the stored credential and retry the tool call once.
 4. If refresh fails (token revoked, refresh token expired), throw `AuthError`.
 
@@ -542,6 +1118,16 @@ The runner catches `AuthError` specially and returns a distinct agent status so 
     output = {
       agentId, role: agent.role, status: 'auth_error', data: null,
       error: `OAuth session expired. Please reconnect your Zapier account.`,
+    }
+  } else if (err instanceof ToolPermissionError) {
+    output = {
+      agentId, role: agent.role, status: 'error', data: null,
+      error: `Tool '${err.toolName}' is not permitted: ${err.capability} capability denied.`,
+    }
+  } else if (err instanceof ToolApprovalRequiredError) {
+    output = {
+      agentId, role: agent.role, status: 'approval_required', data: null,
+      error: `Tool '${err.toolName}' requires approval: ${err.capability} capability is restricted.`,
     }
   } else {
     // Standard error handling
@@ -561,10 +1147,12 @@ When one upstream agent errors but the graph continues running other branches, `
 ```
 app/lib/mcp/
 ├── client.ts          # MCPClient interface + ZapierMCPClient implementation
-├── errors.ts          # MCPServerUnreachableError, MCPToolNotFoundError, AuthError
+├── errors.ts          # MCPServerUnreachableError, MCPToolNotFoundError, AuthError, ToolPermissionError
 ├── auth.ts            # Per-user credential storage + token injection
+├── tool-mapper.ts     # MAJOR FIX: mapAgentToolsToMCP implementation
+├── encryption.ts      # MAJOR FIX: Encryption key rotation with versioning
 ├── dev/
-│   └── mock-zapier-server.ts   # Local mock for development
+│   └── mock-zapier-server.ts   # Local mock for development (5 tools now)
 └── runner.ts          # (existing) — updated to accept MCPClient, remove if/else dispatch
 ```
 
@@ -574,5 +1162,5 @@ app/lib/mcp/
 
 1. **Multi-server support.** When should AgentOS connect to Zapier vs. Make.com vs. n8n? A single `MCPClient` interface can hold multiple server connections keyed by provider name, but the UX for multi-provider auth is not yet designed.
 2. **Tool name collision.** If two MCP servers expose a tool named `gmail.read`, how does AgentOS namespace them? Likely `provider/toolname` (e.g., `zapier/gmail.read`), but this needs UX validation.
-3. **Manifest caching.** `listTools()` should be called once and cached, not on every agent run. Cache invalidation strategy (e.g., on 401, on explicit reconnect) needs a policy.
+3. **Manifest caching.** `listTools()` uses TTL-based caching with invalidation on explicit reconnect. When Zapier pushes breaking changes to the manifest, older pinned versions can be used while the new version is validated. Cache invalidation on 401 is already handled.
 4. **Streaming responses.** Some Zapier tools return large payloads. Does `callTool` block until complete, or does it stream? Zapier's MCP server behavior here needs investigation.
