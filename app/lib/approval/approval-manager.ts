@@ -25,6 +25,8 @@ import { capturePointInTime, summarizeSnapshot } from '@/lib/tracing/snapshot'
 import { emitToRunChannel } from '@/lib/tracing/sse-stream'
 import { eventBufferRegistry } from '@/lib/tracing/event-buffer'
 import type { ApprovalRequiredEvent, ApprovalResolvedEvent } from '@/lib/tracing/event-schema'
+import { getHookRegistry } from '@/lib/hooks'
+import type { HookContext } from '@/lib/hooks/types'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -166,6 +168,20 @@ export async function requestApproval(request: ApprovalRequest): Promise<Resolve
     // Populate secondary index so API route can resolve by toolCallId alone
     toolCallIdIndex.set(toolCallId, key)
 
+    // preApproval hook — fire and forget, does not block approval flow
+    void getHookRegistry().emit('preApproval', {
+      runId,
+      agentId,
+      toolName,
+      approvalId: toolCallId,
+      timestamp: Date.now(),
+      preApproval: {
+        toolName,
+        summary,
+        fields,
+      },
+    })
+
     // Emit approval_required SSE event via the SSE channel (Unit 5a)
     const approvalEvent: ApprovalRequiredEvent = {
       event: 'reasoning',
@@ -277,6 +293,17 @@ export function resolveApproval(params: {
     buffer.addEventWithIntegrity(resolvedEvent)
   }
   emitToRunChannel(runId, resolvedEvent)
+
+  // postApproval hook — fire and forget
+  void getHookRegistry().emit('postApproval', {
+    runId,
+    agentId,
+    approvalId: toolCallId,
+    timestamp: Date.now(),
+    postApproval: {
+      decision: decision as 'approved' | 'denied' | 'cancelled' | 'timeout',
+    },
+  })
 
   const result: ResolvedApproval = { decision, revisedArgs, reason }
   entry.resolve(result)

@@ -7,6 +7,8 @@ import { createTraceEmitter } from '@/lib/tracing/trace-emitter'
 import { runSecretRegistry } from '@/lib/tracing/hmac-signing'
 import { requestApproval } from '@/lib/approval/approval-manager'
 import type { ResolvedApproval } from '@/lib/approval/approval-manager'
+import { getHookRegistry } from '@/lib/hooks'
+import type { HookContext } from '@/lib/hooks/types'
 
 // ---------------------------------------------------------------------------
 // Capability approval configuration (Unit 5)
@@ -127,6 +129,7 @@ export class InProcessRunner implements Runner {
   ): Promise<void> {
     const { runId, graph, signal } = options
     const startTime = Date.now()
+    const hooks = getHookRegistry()
 
     // Reset retry budgets at start of each run
     resetAllRetryBudgets()
@@ -200,6 +203,18 @@ export class InProcessRunner implements Runner {
         timestamp: Date.now()
       })
 
+      // preAgentRun hook — fire and forget, does not block agent execution
+      const preAgentCtx: HookContext = {
+        runId,
+        agentId,
+        timestamp: Date.now(),
+        preAgentRun: {
+          agentRole: agent.role,
+          tools: agent.tools,
+        },
+      }
+      void hooks.emit('preAgentRun', preAgentCtx)
+
       try {
         const tools = agent.tools
         let output: AgentOutput
@@ -223,6 +238,17 @@ export class InProcessRunner implements Runner {
             (sig) => gmailReadWithSignal({ query: 'is:unread newer_than:1d', userId: 'demo' }, sig),
             { abortSignal: signal, retryBudgetDomain: 'gmail' }
           )
+          void hooks.emit('postToolCall', {
+            runId,
+            agentId,
+            toolName: 'gmail.read',
+            timestamp: Date.now(),
+            postToolCall: {
+              toolName: 'gmail.read',
+              result: result.data,
+              durationMs: 0,
+            },
+          })
           if (result.failed) {
             output = { agentId, role: agent.role, status: 'error', data: null, error: result.llmMessage }
           } else {
@@ -292,6 +318,17 @@ export class InProcessRunner implements Runner {
               (sig) => gmailSendWithSignal(draftData.draft, sig),
               { abortSignal: signal, retryBudgetDomain: 'gmail' }
             )
+            void hooks.emit('postToolCall', {
+              runId,
+              agentId,
+              toolName: 'gmail.send',
+              timestamp: Date.now(),
+              postToolCall: {
+                toolName: 'gmail.send',
+                result: result.data,
+                durationMs: 0,
+              },
+            })
             if (result.failed) {
               trace.emitWarning(`Email send failed: ${result.llmMessage}`, 'high')
               output = { agentId, role: agent.role, status: 'error', data: null, error: result.llmMessage }
@@ -311,6 +348,17 @@ export class InProcessRunner implements Runner {
             (sig) => webSearchWithSignal({ query: 'research leads', limit: 10 }, sig),
             { abortSignal: signal, retryBudgetDomain: 'web' }
           )
+          void hooks.emit('postToolCall', {
+            runId,
+            agentId,
+            toolName: 'web.search',
+            timestamp: Date.now(),
+            postToolCall: {
+              toolName: 'web.search',
+              result: result.data,
+              durationMs: 0,
+            },
+          })
           if (result.failed) {
             trace.emitWarning(`Web search failed: ${result.llmMessage}`, 'medium')
             output = { agentId, role: agent.role, status: 'error', data: null, error: result.llmMessage }
@@ -336,6 +384,17 @@ export class InProcessRunner implements Runner {
             (sig) => llmWithSignal({ prompt: `Context:\n${context}\n\nTask: ${agent.description}`, system }, sig),
             { abortSignal: signal, retryBudgetDomain: 'llm', timeoutMs: 120_000 }
           )
+          void hooks.emit('postToolCall', {
+            runId,
+            agentId,
+            toolName: 'llm',
+            timestamp: Date.now(),
+            postToolCall: {
+              toolName: 'llm',
+              result: result.data,
+              durationMs: 0,
+            },
+          })
           if (result.failed) {
             trace.emitWarning(`LLM call failed: ${result.llmMessage}`, 'high')
             output = { agentId, role: agent.role, status: 'error', data: null, error: result.llmMessage }
@@ -350,6 +409,18 @@ export class InProcessRunner implements Runner {
         completions.set(agentId, [output])
         if (output.status === 'completed') completed++
         else errored++
+
+        // postAgentRun hook — fire and forget
+        void hooks.emit('postAgentRun', {
+          runId,
+          agentId,
+          timestamp: Date.now(),
+          postAgentRun: {
+            agentRole: agent.role,
+            status: output.status,
+            output: output.data,
+          },
+        })
 
         callbacks.onStatus({
           event: 'status',
@@ -369,6 +440,15 @@ export class InProcessRunner implements Runner {
       } catch (err: any) {
         errored++
         trace.emitWarning(`Agent error: ${err.message}`, 'high')
+
+        // runError hook
+        void hooks.emit('runError', {
+          runId,
+          agentId,
+          timestamp: Date.now(),
+          runError: { error: err.message },
+        })
+
         const output: AgentOutput = {
           agentId,
           role: agent.role,
@@ -399,6 +479,17 @@ export class InProcessRunner implements Runner {
       }
       await new Promise(resolve => setTimeout(resolve, 50))
     }
+
+    // runComplete hook — fire and forget
+    void hooks.emit('runComplete', {
+      runId,
+      timestamp: Date.now(),
+      runComplete: {
+        agentsCompleted: completed,
+        agentsErrored: errored,
+        durationMs: Date.now() - startTime,
+      },
+    })
 
     callbacks.onDone({
       event: 'done',
