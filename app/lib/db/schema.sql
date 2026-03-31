@@ -46,3 +46,17 @@ CREATE TABLE IF NOT EXISTS runs (
   completed_at TIMESTAMPTZ,
   result TEXT
 );
+
+CREATE TABLE IF NOT EXISTS reasoning_traces (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,
+  events JSONB NOT NULL,
+  retention_days INTEGER NOT NULL DEFAULT 30,
+  flagged BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_reasoning_traces_expires ON reasoning_traces(expires_at);
+CREATE INDEX idx_reasoning_traces_run_id ON reasoning_traces(run_id);

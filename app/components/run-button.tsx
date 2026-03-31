@@ -6,28 +6,32 @@ import { AgentGraph, AgentStatusEvent, RunDoneEvent, RunErrorEvent } from '@/lib
 
 interface RunButtonProps {
   graph: AgentGraph
+  /** Called when the run button is clicked, before SSE starts */
+  onRunStart?: (graph: AgentGraph) => void
   onStatusUpdate: (event: AgentStatusEvent) => void
   onRunDone: (event: RunDoneEvent) => void
   onRunError: (event: RunErrorEvent) => void
 }
 
-export function RunButton({ graph, onStatusUpdate, onRunDone, onRunError }: RunButtonProps) {
+export function RunButton({ graph, onRunStart, onStatusUpdate, onRunDone, onRunError }: RunButtonProps) {
   const [running, setRunning] = useState(false)
-  
+
   const handleRun = async () => {
     if (running) return
     setRunning(true)
-    
+
+    onRunStart?.(graph)
+
     try {
       const res = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ graph }),
       })
-      
+
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
-      
+
       let buffer = ''
 
       while (true) {
@@ -62,7 +66,7 @@ export function RunButton({ graph, onStatusUpdate, onRunDone, onRunError }: RunB
       setRunning(false)
     }
   }
-  
+
   return (
     <button
       onClick={handleRun}

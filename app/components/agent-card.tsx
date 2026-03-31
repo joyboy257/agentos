@@ -2,7 +2,8 @@
 
 export interface AgentCardProps {
   agent: { id: string; name: string; role: string; tools: string[]; description?: string }
-  status: 'ready' | 'running' | 'waiting' | 'completed' | 'error'
+  status: 'ready' | 'running' | 'waiting' | 'completed' | 'error' | 'pending_approval' | 'skipped'
+  milestone?: string
   style?: React.CSSProperties
 }
 
@@ -28,9 +29,11 @@ const statusColors: Record<string, string> = {
   waiting: 'var(--agent-drafter)',
   completed: 'var(--success)',
   error: '#ef4444',
+  pending_approval: '#f97316',
+  skipped: '#6b6b7b',
 }
 
-export function AgentCard({ agent, status, style }: AgentCardProps) {
+export function AgentCard({ agent, status, milestone, style }: AgentCardProps) {
   const borderColor = roleColors[agent.role] || 'var(--border)'
 
   return (
@@ -56,7 +59,7 @@ export function AgentCard({ agent, status, style }: AgentCardProps) {
           height: '8px',
           borderRadius: '50%',
           backgroundColor: statusColors[status],
-          animation: status === 'running' ? 'pulse 1.5s infinite' : 'none',
+          animation: (status === 'running' || status === 'pending_approval') ? 'pulse 1.5s infinite' : 'none',
         }}
       />
 
@@ -71,6 +74,20 @@ export function AgentCard({ agent, status, style }: AgentCardProps) {
       >
         {agent.name || agent.role.replace('_', ' ')}
       </div>
+
+      {/* Milestone label */}
+      {milestone && (
+        <div
+          style={{
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            marginBottom: '6px',
+            lineHeight: 1.3,
+          }}
+        >
+          {milestone}
+        </div>
+      )}
 
       {/* Agent description */}
       {agent.description && (

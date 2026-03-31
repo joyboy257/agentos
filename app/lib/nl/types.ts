@@ -53,6 +53,7 @@ export type RunDoneEvent = {
   summary: string
   agentsCompleted: number
   agentsErrored: number
+  totalRetries?: number
   durationMs: number
   timestamp: number
 }
