@@ -1,8 +1,48 @@
 import { gmail } from '@googleapis/gmail'
+import { getGmailToken, setGmailToken } from '../db/queries'
+
+export interface GmailClient {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: Date;
+}
 
 export function createGmailClient(accessToken: string) {
   const gmailClient = gmail({ version: 'v1', auth: accessToken })
   return gmailClient
+}
+
+export async function getGmailClientForUser(userId: string): Promise<GmailClient | null> {
+  const token = await getGmailToken(userId)
+
+  if (!token) return null
+
+  // Check if token is expired (with 5-min buffer)
+  if (token.expires_at && new Date(token.expires_at) < new Date(Date.now() + 5 * 60 * 1000)) {
+    // Token expired — in Phase 1, users need to re-authenticate
+    // Full refresh flow deferred to Phase 2
+    return null
+  }
+
+  return {
+    accessToken: token.access_token,
+    refreshToken: token.refresh_token ?? undefined,
+    expiresAt: token.expires_at ?? undefined,
+  }
+}
+
+export async function saveGmailTokenForUser(
+  userId: string,
+  accessToken: string,
+  refreshToken?: string,
+  expiresAt?: Date
+): Promise<void> {
+  await setGmailToken({
+    user_id: userId,
+    access_token: accessToken,
+    refresh_token: refreshToken ?? null,
+    expires_at: expiresAt ?? null,
+  })
 }
 
 export async function listEmails(accessToken: string, query: string = 'is:unread newer_than:1d') {

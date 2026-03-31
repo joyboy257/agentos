@@ -1,0 +1,72 @@
+export interface Agent {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  role: 'email_agent' | 'research_agent' | 'support_agent';
+  config: Record<string, unknown>;
+  status: AgentStatus;
+  schedule: string | null;
+  budget_ms: number | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export type AgentStatus = 'idle' | 'running' | 'waiting_for_approval' | 'paused' | 'completed' | 'failed';
+
+export interface Run {
+  id: string;
+  agent_id: string;
+  user_id: string;
+  status: RunStatus;
+  started_at: Date | null;
+  completed_at: Date | null;
+  created_at: Date;
+}
+
+export type RunStatus = 'scheduled' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'paused';
+
+export interface Checkpoint {
+  id: string;
+  run_id: string;
+  step: number;
+  state_before: Record<string, unknown> | null;
+  state_after: Record<string, unknown> | null;
+  tool_name: string | null;
+  tool_call_id: string | null;
+  tool_result: unknown | null;
+  created_at: Date;
+}
+
+export interface Approval {
+  id: string;
+  run_id: string;
+  step: number;
+  tool_name: string;
+  args: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'denied' | 'timeout';
+  created_at: Date;
+  resolved_at: Date | null;
+}
+
+export interface WorkingMemoryEntry {
+  session_id: string;
+  key: string;
+  value: unknown;
+  updated_at: Date;
+}
+
+export interface Session {
+  id: string;
+  user_id: string;
+  expires_at: Date;
+  created_at: Date;
+}
+
+export interface GmailToken {
+  user_id: string;
+  access_token: string;
+  refresh_token: string | null;
+  expires_at: Date | null;
+  created_at: Date;
+}

@@ -1,25 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionFromCookie } from '@/lib/auth/session'
-import { buildGmailAuthUrl } from '@/lib/gmail/oauth'
-import { nanoid } from 'nanoid'
+import { saveGmailTokenForUser } from '@/lib/gmail/client'
+import { exchangeCodeForTokens } from '@/lib/gmail/oauth'
 
-export async function GET(req: NextRequest) {
-  const session = await getSessionFromCookie()
-  if (!session) {
+// Google OAuth2 configuration
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
+const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/gmail/callback`
+
+export async function GET(request: NextRequest) {
+  // Get user from session (set by middleware)
+  const userId = request.headers.get('x-user-id')
+
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const state = nanoid()
-  const authUrl = buildGmailAuthUrl(state)
+  const code = request.nextUrl.searchParams.get('code')
 
-  const response = NextResponse.redirect(authUrl)
-  response.cookies.set('gmail_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600,
-    path: '/',
+  if (!code) {
+    // Redirect to Google OAuth
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID!)
+    authUrl.searchParams.set('redirect_uri', REDIRECT_URI)
+    authUrl.searchParams.set('response_type', 'code')
+    authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send')
+    authUrl.searchParams.set('access_type', 'offline')
+    authUrl.searchParams.set('prompt', 'consent')
+
+    return NextResponse.redirect(authUrl.toString())
+  }
+
+  // Exchange code for tokens
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID!,
+      client_secret: GOOGLE_CLIENT_SECRET!,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: REDIRECT_URI,
+    }),
   })
 
-  return response
+  if (!tokenResponse.ok) {
+    return NextResponse.json({ error: 'Failed to exchange code for tokens' }, { status: 500 })
+  }
+
+  const tokens = await tokenResponse.json()
+
+  await saveGmailTokenForUser(
+    userId,
+    tokens.access_token,
+    tokens.refresh_token,
+    new Date(Date.now() + tokens.expires_in * 1000)
+  )
+
+  return NextResponse.redirect(new URL('/app?gmail=connected', request.url))
 }

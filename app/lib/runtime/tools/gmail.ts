@@ -1,44 +1,64 @@
-import { getCredential } from '@/lib/db/queries'
-import { decrypt } from '@/lib/crypto'
-import { refreshAccessToken } from '@/lib/gmail/oauth'
+import { getGmailClientForUser } from '../../gmail/client'
 import { listEmails, sendEmail } from '@/lib/gmail/client'
 
-export async function gmailReadTool(query: string = 'is:unread newer_than:1d', userId: string) {
-  const credential = await getCredential(userId, 'gmail')
-  if (!credential) {
-    return { error: true, message: 'Gmail not connected' }
+export async function gmailReadTool(userId: string, args: { query?: string; maxResults?: number }) {
+  const gmailClient = await getGmailClientForUser(userId)
+
+  if (!gmailClient) {
+    return {
+      success: false,
+      error: 'Gmail not connected. Please connect your Gmail account.',
+      code: 'GMAIL_NOT_CONNECTED',
+    }
   }
 
   try {
-    let tokens = JSON.parse(decrypt(credential.encrypted_token))
-
-    if (credential.expires_at && new Date(credential.expires_at) < new Date()) {
-      const refreshed = await refreshAccessToken(tokens.refresh_token)
-      tokens.access_token = refreshed.access_token
+    const result = await listEmails(gmailClient.accessToken, args.query ?? 'is:unread newer_than:1d')
+    return {
+      success: true,
+      data: {
+        emails: result.emails,
+        total: result.emails.length,
+      },
     }
-
-    return await listEmails(tokens.access_token, query)
   } catch (err) {
-    return { error: true, message: 'Gmail read failed' }
+    return {
+      success: false,
+      error: 'Failed to read Gmail',
+      code: 'GMAIL_API_ERROR',
+    }
   }
 }
 
-export async function gmailSendTool(to: string, subject: string, body: string, userId: string) {
-  const credential = await getCredential(userId, 'gmail')
-  if (!credential) {
-    return { error: true, message: 'Gmail not connected' }
+export async function gmailSendTool(
+  userId: string,
+  args: { to: string; subject: string; body: string; cc?: string }
+) {
+  const gmailClient = await getGmailClientForUser(userId)
+
+  if (!gmailClient) {
+    return {
+      success: false,
+      error: 'Gmail not connected. Please connect your Gmail account.',
+      code: 'GMAIL_NOT_CONNECTED',
+    }
   }
 
   try {
-    let tokens = JSON.parse(decrypt(credential.encrypted_token))
-
-    if (credential.expires_at && new Date(credential.expires_at) < new Date()) {
-      const refreshed = await refreshAccessToken(tokens.refresh_token)
-      tokens.access_token = refreshed.access_token
+    const result = await sendEmail(gmailClient.accessToken, args.to, args.subject, args.body)
+    return {
+      success: true,
+      data: {
+        messageId: result.messageId,
+        to: args.to,
+        subject: args.subject,
+      },
     }
-
-    return await sendEmail(tokens.access_token, to, subject, body)
   } catch (err) {
-    return { error: true, message: 'Gmail send failed' }
+    return {
+      success: false,
+      error: 'Failed to send email',
+      code: 'GMAIL_API_ERROR',
+    }
   }
 }

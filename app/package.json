@@ -11,6 +11,8 @@
   "dependencies": {
     "@googleapis/gmail": "^16.1.1",
     "@vercel/postgres": "^0.10.0",
+    "bullmq": "^5.71.1",
+    "ioredis": "^5.10.1",
     "lucide-react": "^0.468.0",
     "nanoid": "^5.0.9",
     "next": "^16.2.1",
