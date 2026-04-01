@@ -1,14 +1,14 @@
 # AgentOS
 
-**Multi-agent AI orchestration for everyone — not just developers.**
+**Hire an AI employee. It works while you sleep.**
 
 ---
 
 ## The Problem
 
-Most people who could benefit from AI agents don't know they exist. They use ChatGPT. They pay consultants too much for work that could be automated. They wear twelve hats and still can't get everything done.
+Maria owns a 12-person HVAC company. She pays $2,000/month for a virtual assistant who checks her email once a day. A lead emails at 10pm. She finds out at 9am. The job went to whoever responded first.
 
-The agents exist. The infrastructure to run them exists. But there's no way for a non-technical person to **assemble a team of agents, put them to work on their business, and watch them do it** — without learning to code.
+The agents exist. The infrastructure to run them exists. But there's no way for Maria to **hire an AI employee that works 24/7, remembers what she likes, and only interrupts her when it genuinely needs a human decision.**
 
 The tool that does that doesn't exist yet.
 
@@ -16,43 +16,39 @@ The tool that does that doesn't exist yet.
 
 ## What We're Building
 
-AgentOS is a visual platform for multi-agent AI orchestration — built for people who manage teams, not people who build software.
+AgentOS is a **world-class agent harness** — not a workflow builder, not a pipeline tool, not a chat interface — with **Canva-level UX for non-technical business users**.
 
-You open it, see a canvas, and think: **"finally."**
+The engineering is built on patterns from the world's best agent harnesses. The UX is built for Maria.
 
-- Drag in an agent. Give it a name. Tell it what to do.
-- Connect agents with handoffs — this one researches, that one writes, that one sends.
-- Hit Run. Watch your team work.
-- The Orchestrator makes sure nothing falls through the cracks.
+- You describe what you want: "I want an agent that handles my inbound customer emails"
+- You watch your agent get built in real time — schedule, tools, escalation rules shown as a preview
+- You click "Activate." The agent is live.
+- You watch it work. Real-time reasoning traces show you exactly what it's doing.
+- When it needs help, you get a ping. You decide. It keeps working.
 
-No terminal. No code. No tmux grids. Just your business running on agent power.
-
----
-
-## Core Premise
-
-**PREMISE 1:** Agents are the product — not a point solution.
-AgentOS isn't a social media tool or a Google Ads optimizer. It's the platform that makes any agent accessible to anyone.
-
-**PREMISE 2:** The distribution problem is the real problem.
-Most people who could use agents don't know what an agent is. The gap isn't the agent runtime — it's getting agents into the hands of non-technical people.
-
-**PREMISE 3:** UI/UX is the moat.
-Not the protocol. Not the runtime. The feeling of opening a canvas, dragging in an agent, and understanding immediately what to do.
+No terminal. No code. No JSON configs. Just an employee that works while you sleep.
 
 ---
 
-## How It Works
+## The Five Pillars
 
-```
-  CANVAS          RUNTIME          ORCHESTRATOR
-  ───────         ───────         ───────────
-  Visual space    Where agents     The watchful
-  to compose       actually run     manager that
-  your agent       — connected      catches failures
-   team            to tools,        before they
-                   files, APIs      cascade
-```
+1. **NL-to-Deployment** — Describe what you want. Watch your team get built. No config files.
+2. **Visual Agent Harness** — Org chart canvas with live status, reasoning traces, memory state.
+3. **Durable Execution** — Checkpoints survive server restarts. Agents resume from where they left off.
+4. **Persistent Memory + Judgment** — Agents remember what happened last week. Learn from your approvals. Only escalate what genuinely needs you.
+5. **Business Data Access** — OAuth connections to Gmail, Calendar, HubSpot. Real work, not demos.
+
+---
+
+## The AHA Moment
+
+Not a single dramatic reveal. Trust is earned incrementally.
+
+Maria hires an agent Monday. Tuesday she wakes up to a notification: **"Agent handled 3 emails while you slept. 1 escalated."** She didn't have to check. The agent just worked.
+
+After two weeks: Maria realizes she almost handled an email herself before remembering the agent already did it.
+
+After a month: Maria goes on vacation. Her agent handles everything. She gets back to a summary: **"Agent worked 12 days. Handled 47 emails. 4 escalated. All resolved."** She didn't think about work once.
 
 ---
 
@@ -68,23 +64,36 @@ The right comparison isn't "VS Code for agents." It's **"Canva for AI agents."**
 
 ## Competitive Position
 
-| Product | Target | Canvas | Visual Orchestration |
-|---------|--------|--------|---------------------|
-| Cursor Glass | Developers | ❌ | ❌ |
-| Collaborator | Developers | ✅ | ❌ (terminals) |
-| Emdash | Developers | ❌ | ❌ |
-| Cling Kanban | Developers | ✅ | ❌ (display only) |
-| **AgentOS** | **Everyone else** | **✅** | **✅** |
+| Product | Target | Durable | Always-On | Visual | Real Work |
+|---------|--------|---------|-----------|--------|-----------|
+| Zapier | Everyone | ❌ | ❌ | ❌ | ✅ |
+| AgentGPT | Developers | ❌ | ❌ | ❌ | ✅ |
+| n8n | Developers | ✅ | ❌ | ✅ | ✅ |
+| **AgentOS** | **Maria** | **✅** | **✅** | **✅** | **✅** |
 
-No existing product makes multi-agent orchestration accessible to non-technical business users. That's the opening.
+No existing product gives Maria a persistent, memory-enabled AI employee she can hire in 5 minutes and trust to work while she sleeps. That's the opening.
+
+---
+
+## The Roadmap
+
+**Phase 1 — MVP (0–90 days)**
+Prove the thesis: a non-technical user can hire a persistent, durable AI employee in under 5 minutes.
+
+Canvas dashboard · NL-to-agent deployment · Gmail OAuth · Durable execution · Real-time reasoning traces · Escalation modal · Agent cards · Activity log · Magic link auth · Push notifications
+
+**Phase 2 — Differentiate (90–180 days)**
+Build the moat: permission auto-approval, long-term memory, PROACTIVE always-on, vertical template gallery.
+
+**Phase 3 — Scale (180–270 days)**
+Multi-agent orchestration · Team collaboration · Remote bridge · Enterprise.
 
 ---
 
 ## Status
 
-Pre-product. Building in public.
+Pre-product MVP. Building in public.
 
 Docs are in `docs/`. Archived work is in `docs/archived/`.
 
-##
-
+---

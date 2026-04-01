@@ -1,198 +1,312 @@
-# AgentOS v3 — Product Requirements Document
+# AgentOS v4 — Product Requirements Document
 
-**Version:** 1.2
-**Date:** 2026-03-31
-**Status:** Living Document
-**Classification:** Product — Source of Truth
+**Version:** 4.0
+**Date:** 2026-04-01
+**Status:** Active — Source of Truth
+**Classification:** Product — Internal
 
 ---
 
 ## Table of Contents
 
-1. [Vision & Principles](#1-vision--principles)
-2. [Target User](#2-target-user)
-3. [Core Product Concept](#3-core-product-concept)
-4. [Product Architecture](#4-product-architecture)
-5. [Feature Specifications](#5-feature-specifications)
-6. [UX Specifications](#6-ux-specifications)
-7. [Technical Architecture](#7-technical-architecture)
-8. [Edge Cases & Error States](#8-edge-cases--error-states)
-9. [Phased Scope](#9-phased-scope)
-10. [Success Metrics](#10-success-metrics)
-11. [Glossary](#11-glossary)
-12. [Appendix: Claude Code Competitive Analysis](#12-appendix-claude-code-competitive-analysis)
+1. [Vision](#1-vision)
+2. [Target Users](#2-target-users)
+3. [The Real Product](#3-the-real-product)
+4. [What We Are NOT Building](#4-what-we-are-not-building)
+5. [Core Product Concept](#5-core-product-concept)
+6. [The MVP](#6-the-mvp)
+7. [UX Specifications](#7-ux-specifications)
+8. [Technical Architecture](#8-technical-architecture)
+9. [Phased Roadmap](#9-phased-roadmap)
+10. [Business Model](#10-business-model)
+11. [Success Metrics](#11-success-metrics)
+12. [Document Roadmap](#12-document-roadmap)
 
 ---
 
-## 1. Vision & Principles
-
-### 1.1 The One-Line Pitch
+## 1. Vision
 
 **"Hire an AI employee. It works while you sleep."**
 
-### 1.2 The AHA Moment
+AgentOS is a **world-class agent harness** — not a workflow tool, not a task runner, not a pipeline builder — with **Canva-level UX for non-technical business users**.
 
-The AHA moment is not a single dramatic reveal — it is the accumulation of moments where a user realizes their agent kept working correctly without being checked. It is the moment you were about to handle an email yourself when you noticed your agent already handled it. Trust is built incrementally through demonstrated competence.
+The comparison is not "Claude Code for business." It's **"Canva for AI agents."**
 
-The first high-impact AHA moment typically happens within the first 3 days when:
-1. User hires an agent ("handle my inbound emails")
-2. User wakes up or returns to find: "12 emails processed. 2 escalated. See results →"
-3. User realizes they didn't need to check — the agent just worked
+- Claude Code is for developers who live in terminals and understand agents
+- AgentOS is for small business owners who have never built an automation and don't want to
 
-### 1.3 Design Principles
+**The competitive insight:** Anthropic accidentally leaked their Claude Code source in March 2026. This gave us the engineering blueprint for world-class agent infrastructure — durable execution, streaming tool execution, permission auto-approval, multi-agent orchestration, context compaction. We can build the harness. Anthropic will never build the UX for Maria.
 
-| Principle | What It Means |
-|-----------|--------------|
-| **Agents are workers** | Not pipelines. Not workflows. Employees who have a job to do. |
-| **The canvas is a team dashboard** | Not a flowchart. Not a configuration screen. A living org chart. |
-| **Less input, more output** | The user describes outcomes. The agent figures out the steps. |
-| **Visible without reading** | Non-technical users understand what's happening without documentation. |
-| **Escalation is a feature** | The agent asking for help is not failure. It's trust-building. Maria wants to approve the important ones, not every action. |
-| **Trust is earned** | Start with low-stakes. Let the agent prove itself. |
-| **Personality belongs in professional tools** | Even a business dashboard should feel alive. The Buddy system taught us that personality drives engagement. |
-| **Agents act on their own judgment** | Between users, the agent should act on best judgment rather than waiting for confirmation (PROACTIVE principle). |
-
-### 1.4 Anti-Principles (What We Won't Do)
-
-- Won't require users to understand agent architecture
-- Won't expose cron expressions, JSON configs, or code
-- Won't design for "run once" workflows
-- Won't compete on runtime quality (commodity)
-- Won't build CLI or developer-focused interfaces
-- Won't ship half-tested capabilities without feature flag protection
+**The real competitive window:** 6-12 months before Anthropic or a well-funded competitor figures out what we're doing and builds it for this audience. We use that window to establish product-market fit, get vertical templates live (HVAC, legal, real estate), and build the trust moat that comes from Maria's agents having worked for her for months.
 
 ---
 
-## 2. Target User
+## 2. Target Users
 
-### 2.1 Primary Persona
+### Primary Persona: Maria
 
-**Name:** Maria
-**Age:** 44
-**Role:** Owns a 12-person HVAC company
-**Tech comfort:** Uses QuickBooks, Gmail, LinkedIn. Has never built an automation. Used Zapier once, got confused, gave up.
-**Pain points:** 6 hours/week spent on email triage. Misses leads because she can't respond fast enough. Pays a virtual assistant $2,000/month for work that could be automated.
-**What she wants:** "I want someone to handle the emails I don't have time for. I want to approve the important ones and let the rest go."
+**Age:** 44 | **Role:** Owns a 12-person HVAC company
+**Tech:** QuickBooks, Gmail, LinkedIn. Has never built an automation. Used Zapier once, got confused.
+**Pain:** 6 hours/week on email triage. Misses leads. Pays $2,000/month for a VA who checks email once a day.
+**Wants:** "I want someone to handle the emails I don't have time for. I want to approve the important ones and let the rest go."
+**Right now:** Her VA doesn't work while Maria sleeps. A lead at 10pm gets a response at 9am. That's a lost job.
 
-### 2.2 Secondary Persona
+### Secondary Persona: James
 
-**Name:** James
-**Age:** 31
-**Role:** Marketing manager at a 50-person e-commerce brand
-**Tech comfort:** Uses HubSpot, Slack, Notion. Has tried Make.com and Zapier. Has shipped one AgentGPT workflow that didn't stick.
-**Pain points:** Competitive analysis takes 4 hours every Monday. Social media monitoring is manual. Can't afford a full-time marketing hire for everything he needs.
-**What he wants:** "I want a marketing team that never sleeps. Research on competitors every week. Content drafts daily. I review and approve."
+**Age:** 31 | **Role:** Marketing manager at a 50-person e-commerce brand
+**Tech:** HubSpot, Slack, Notion. Has tried Make.com. Shipped one AgentGPT workflow that didn't stick.
+**Pain:** Competitive analysis takes 4 hours every Monday. Social media monitoring is manual.
+**Wants:** "I want a marketing team that never sleeps. Research on competitors every week. Content drafts daily. I review and approve."
 
-### 2.3 User Quote
+### The Distinction That Matters
 
-> "I don't want to learn what an agent is. I want to hire one, tell it what I want, and have it work. If it needs me, it should ask. Otherwise, I trust it to do its job."
+Maria and James are both non-technical business users. But:
 
----
+- Maria needs **one agent that works always-on** and handles her email flood
+- James needs **a team of agents** that coordinate (research → draft → review)
 
-## 3. Core Product Concept
-
-### 3.1 What You Hire
-
-A **hireable agent** is a persistent AI worker with:
-
-- A **role** (what it does)
-- A **heartbeat schedule** (when it wakes up)
-- A **toolset** (what it can do)
-- A **resource budget** (how much it can spend)
-- An **escalation policy** (when it asks for help)
-- A **memory** — working memory (per-session, Phase 1) and long-term memory (cross-session, Phase 2)
-
-### 3.2 What You Say vs. What the System Infers
-
-| User Says | System Infers |
-|-----------|--------------|
-| "Handle my inbound emails" | Agent role, Gmail read/write tools, daily heartbeat, escalation policy |
-| "Run every morning at 9am" | Heartbeat schedule: daily 9am UTC |
-| "Let me know if anything goes to executives" | Escalation rule: emails to exec domain → approval required |
-| "Keep it conservative" | Low resource budget; fewer actions per run |
-| "I want to see everything before it sends" | Layer 4: per-action approval |
-
-### 3.3 The Hire-to-Work Flow
-
-```
-1. Open app → Canvas shows "Your team" (empty or with existing agents)
-2. Click "Hire an agent"
-3. Type: "I want an agent that handles my inbound customer emails"
-4. NL layer parses → shows agent preview: role, tools, schedule, budget
-5. User adjusts if needed (or accepts defaults)
-6. Click "Activate" (not "Run" — this is a hire, not a task)
-7. Agent card appears on canvas: idle, next wake: tomorrow 9am
-8. Next morning → Agent wakes, checks email, acts or escalates
-9. User gets ping: "3 emails escalated. Review →"
-```
-
-### 3.4 The Escalation Flow
-
-```
-1. Agent encounters situation requiring judgment
-2. Agent pauses at checkpoint
-3. User gets pinged (in-app notification + optional email)
-4. User opens escalation modal
-5. Modal shows: what happened, what the agent wants to do, reasoning trace
-6. User: Approve / Edit and Approve / Skip / Cancel
-7. Agent resumes with decision
-8. Agent updates working memory with context from the decision
-```
+The MVP serves Maria. Phase 2 serves James.
 
 ---
 
-## 4. Product Architecture
+## 3. The Real Product
 
-### 4.1 Two-Mode Interface
+### What AgentOS Actually Is
 
-**Mode A — Team Dashboard (default)**
-Full canvas view. User sees their agent team, status, recent activity. Chat is a floating input at the bottom for hiring new agents or asking questions.
+**A visual platform for hiring, managing, and trusting AI employee teams.**
 
-**Mode B — Activity**
-Activity log focused. Timeline view of all agent actions across all agents. Filterable by agent, date, action type, status.
+Not a configuration screen. Not a workflow canvas. Not a pipeline builder. A **team dashboard** where Maria opens the app, sees her agents working, and feels the same confidence she'd feel seeing her office staff doing their jobs.
 
-### 4.2 Canvas Layout
+The harness is the engineering foundation (reverse-engineered from Claude Code). The UX is the moat.
+
+### The Five Pillars
+
+1. **NL-to-Deployment** — Describe what you want in plain English. Watch your agent team get built in real time. No config files. No JSON. No agents-understand.
+
+2. **Visual Agent Harness** — A canvas that shows agent teams as an org chart with live status, reasoning traces, and memory state. Maria sees what her agents are doing right now — not a log file.
+
+3. **Durable Execution** — Agents that survive server restarts, checkpoint their progress, and resume from where they left off. This is the engineering moat from Claude Code patterns. It makes agents feel like employees, not scripts.
+
+4. **Persistent Memory + Judgment** — Agents that remember what happened last week, learn from Maria's approval patterns, and only escalate what genuinely needs human input. Not stateless pipelines.
+
+5. **Business Data Access** — OAuth connections to Gmail, Calendar, HubSpot. Agents that can actually do the work, not just draft responses.
+
+### What Makes It World-Class (from Claude Code Leak)
+
+These are the engineering patterns we reverse-engineered and will implement:
+
+| Claude Code Pattern | AgentOS Implementation |
+|--------------------|----------------------|
+| Streaming tool execution | Tools fire as agent reasons — Maria sees "Reading inbox..." before full response |
+| Permission auto-approval | Routine actions auto-execute; only unusual ones escalate |
+| Fork + sidechain multi-agent | Coordinator spawns parallel workers; each has isolated transcript |
+| Context compaction | Long agent sessions don't hit token limits; old context is summarized |
+| Typed exit reasons | Agent run ends with `completed\|escalated\|budget_exceeded` — not ambiguous |
+| Checkpoint + resume | Server restarts don't kill in-flight work |
+| Heartbeat scheduler | PROACTIVE agents wake on interval, check for urgent work |
+| Dream consolidation | KAIROS: between heartbeats, agent processes and refines memory |
+
+These are not features. They are the **engineering substrate** that makes the product work. Maria never sees "checkpoint resume" — she sees her agent working reliably and never losing context. That is the product.
+
+---
+
+## 4. What We Are NOT Building
+
+**Not a workflow tool.** Zapier, Make, n8n are workflow builders. You drag steps, connect triggers, run the pipeline. Every run starts fresh. Nothing persists. Nothing learns.
+
+**Not a chat interface.** ChatGPT, Claude.ai are conversation tools. You type, it responds, done. The context is the conversation. There's no persistent worker.
+
+**Not a developer tool.** Claude Code, Copilot, Devin are for engineers. They assume technical literacy. AgentOS assumes none.
+
+**Not "an email agent."** An email agent is a template. The product is the harness. The template is the first thing Maria puts in the harness. The harness is the moat.
+
+**Not Phase 2, Phase 1.5, and Phase 2.** The phased roadmap is: MVP, Differentiate, Scale. No suffixes. No confusion.
+
+---
+
+## 5. Core Product Concept
+
+### The Hiring Metaphor
+
+You don't run an agent. You **hire** one.
+
+| Traditional Automation | AgentOS |
+|----------------------|---------|
+| You configure a workflow | You describe a worker |
+| The workflow runs when triggered | The agent works on a schedule + proactively |
+| Every run starts fresh | The agent remembers previous sessions |
+| You check the output | The agent notifies you when it needs you |
+| The workflow is a tool | The agent is an employee |
+
+### The Abstraction Ladder
+
+Maria operates at the layer she's comfortable with. She can go deeper if she wants, but she never has to.
+
+| Layer | What Maria Says | What It Means |
+|------|---------------|---------------|
+| **1 — Pure intent** | "Handle my customer emails" | Agent infers everything: schedule, tools, escalation |
+| **2 — Agent config** | "Check my email every hour, CC me on anything to executives" | She controls schedule + escalation, not tools |
+| **3 — Tool access** | "Give it Gmail access but NOT Salesforce" | She controls what the agent can touch |
+| **4 — Per-action** | "Always ask me before it sends to a new person" | She approves every individual action |
+
+Most users start at Layer 1. The system surfaces Layer 2 naturally ("When should it run?"). Deeper layers are available but not required.
+
+### The AHA Moment
+
+Not a single dramatic reveal. Trust is earned incrementally.
+
+Maria hires an agent Monday morning. Tuesday she wakes up and sees a notification: "Agent handled 3 emails while you slept. 1 escalated." She didn't have to check. The agent just worked. That's the moment.
+
+After two weeks: Maria realizes she almost handled an email herself before remembering the agent already did it. That's when she knows the agent is real.
+
+After a month: Maria goes on vacation. Her agent handles everything. She gets back to a summary: "Agent worked 12 days. Handled 47 emails. 4 escalated. All resolved." She didn't think about work once.
+
+---
+
+## 6. The MVP
+
+### What the MVP Must Prove
+
+The MVP is not a template or a feature. It is proof of the thesis:
+
+> **A non-technical business user can hire a persistent, memory-enabled AI employee in under 5 minutes and trust it to work while they sleep.**
+
+### MVP Feature Set
+
+**What ships in the MVP:**
+
+1. **Visual Canvas** — Maria opens the app, sees her agent team as an org chart. Cards show role, status (idle/running/waiting), and what the agent is doing right now.
+
+2. **NL-to-Agent Deployment** — Maria types "I want an agent that handles my inbound customer emails." The system shows her a preview of what that agent would do — its schedule, its tools, its escalation rules. She clicks "Activate." The agent is live.
+
+3. **Gmail Integration** — Agent can read, draft, and send email via OAuth. Real work, not demos.
+
+4. **Durable Execution** — The agent is a persistent process, not a request-response. It checkpoints after every action. Server restarts don't kill in-flight work.
+
+5. **Real-Time Reasoning Traces** — Maria watches her agent think. Not a spinner. Not a "working..." message. The agent's actual reasoning, streamed live: "Checking inbox... Found 12 emails... 3 are new leads... Escalating 1 (mentions competitor pricing)... Drafting responses for 2..."
+
+6. **Escalation Modal** — When the agent needs human input, Maria gets a notification. She opens the modal, sees what happened and what the agent wants to do, and decides: Approve / Edit / Skip / Cancel.
+
+7. **Agent Card** — Status dot, last run time, next wake time, budget bar. Maria always knows the state of her team.
+
+8. **Activity Log** — Every agent action is logged as a ticket. Searchable. Filterable. Exportable.
+
+9. **Magic Link Auth** — Maria signs in with email. No passwords.
+
+10. **Push Notifications** — Escalations reach Maria immediately. Not in-app polling. Real push.
+
+### What Is NOT in the MVP
+
+- **Multi-agent orchestration** — That is Phase 2 (Differentiate)
+- **Template gallery with 8 templates** — The MVP has 1 working agent type (email handler). That is sufficient to prove the thesis.
+- **Long-term memory** — Working memory (per-session) ships in MVP. Cross-session memory ships at Phase 2.
+- **Calendar, HubSpot, CRM integrations** — Gmail is enough for MVP.
+- **Skills directory** — Ships at Phase 2 (Differentiate). MVP uses structured NL config.
+- **Governance board** — Ships at Phase 2.
+- **Auto-pause on budget** — Ships at Phase 2.
+- **PROACTIVE always-on mode** — Ships at Phase 2 (Differentiate). MVP uses scheduled heartbeats.
+
+### The MVP Is Not an Email Agent
+
+The MVP ships an email handler because that is what Maria needs. But the **product is the harness** — the durable execution, the real-time traces, the visual canvas, the NL deployment. The email handler is the first use case. Not the product.
+
+If we shipped nothing but a canvas with a durable, memory-enabled, always-on agent running Gmail — that proves the thesis. The template gallery, multi-agent, and skills system are surface on top.
+
+---
+
+## 7. UX Specifications
+
+### The Canvas
+
+The canvas is a **team dashboard**, not a flowchart.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  AgentOS          Your Team (3 agents)           [Activity] [⚙]  │
+│  AgentOS          Your Team                        [Activity] [⚙]  │
 ├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│     ┌──────────┐                                                   │
-│     │ Maria    │  ← User (top of org chart)                      │
-│     │ (you)    │                                                   │
-│     └────┬─────┘                                                   │
-│          │                                                         │
-│    ┌─────┴──────┬────────────┐                                    │
-│    ▼            ▼            ▼                                    │
-│ ┌──────┐  ┌────────┐  ┌───────────┐                              │
-│ │Email  │  │Research│  │Support    │  ← Agent cards              │
-│ │Agent  │  │Agent   │  │Agent      │     (org chart layout)       │
-│ │✓ idle │  │◐ running│ │⚠ waiting │                              │
-│ │wake:9a│  │doing: X │  │1 pending  │                              │
-│ └──────┘  └────────┘  └───────────┘                              │
-│                                                                     │
-│  ──────────────────────────────────────────────────────────────    │
-│  [Type to hire: "I want an agent that..."]                         │
-│                                                                     │
+│                                                                       │
+│     ┌──────────┐                                                     │
+│     │ Maria    │                                                     │
+│     │ (you)   │                                                     │
+│     └────┬─────┘                                                     │
+│          │                                                           │
+│    ┌─────┴──────┬──────────────────┐                                │
+│    ▼            ▼                  ▼                                │
+│ ┌──────┐  ┌──────────┐  ┌─────────────┐                          │
+│ │Email  │  │Research  │  │ Marketing   │                          │
+│ │Handler│  │Agent     │  │Agent        │                          │
+│ │✓ idle │  │◐ running │  │💤 dreaming  │                          │
+│ │9am ✓ │  │research: │  │memory proc │                          │
+│ └──────┘  │Apple/MSFT │  └─────────────┘                          │
+│            └──────────┘                                             │
+│                                                                       │
+│  ──────────────────────────────────────────────────────────────     │
+│  [Type to hire: "I want an agent that..."]                          │
+│                                                                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.3 Agent Card Anatomy
+**Key UX principles:**
+- Maria never sees a node graph, edge, pipeline, or flowchart
+- Agents appear as employee cards in an org chart
+- Live status is visible at a glance — green (idle), pulsing green (working), amber (waiting for approval), gray (paused)
+- The "Type to hire" bar is always visible, always inviting
+
+### The Agent Card
 
 ```
 ┌─────────────────────────────┐
-│ 🟢 Email Handler     [⋯]    │  ← Role + status dot
-│ Runs: Daily 9am            │  ← Heartbeat schedule
-│ Last: Today 9:01am — ✓      │  ← Last wake result
-│ Next: Tomorrow 9:00am       │  ← Countdown
-│ ─────────────────────────── │
-│ [████████░░] 80% budget     │  ← Resource budget bar
-│ 12 actions today             │
+│ 🟢 Email Handler     [⋯]    │
+│ "Handles inbound customer     │
+│  emails"                    │
+│ ──────────────────────────── │
+│ ✓ Idle                      │
+│ Last: Today 9:01am — 3 done  │
+│ Next: Tomorrow 9:00am        │
+│ ──────────────────────────── │
+│ [████████░░] 80% budget      │
+│ 47 emails this week          │
 └─────────────────────────────┘
 ```
 
-### 4.4 Escalation Modal
+For PROACTIVE agents (Phase 2), the card changes:
+```
+┌─────────────────────────────┐
+│ 🟢 Email Handler     [⋯]    │
+│ Always-on · Memory active    │
+│ ──────────────────────────── │
+│ ✓ Working · woke 2min ago    │
+│ Doing: "Drafting response    │
+│  to Acme Corp inquiry..."    │
+│ ──────────────────────────── │
+│ [████████░░] 80% budget      │
+│ 12 emails today · 3 escalated │
+└─────────────────────────────┘
+```
+
+### The Reasoning Trace Panel
+
+When Maria clicks on a running agent, a panel slides in from the right showing the agent's live reasoning:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Email Handler — Working                    [−] [×]  │
+├─────────────────────────────────────────────────────┤
+│ 9:01:03  → Checking inbox...                       │
+│ 9:01:04  → Found 14 new emails                     │
+│ 9:01:05  → 3 from existing customers (skipping)    │
+│ 9:01:06  → 8 are new inquiries                     │
+│ 9:01:07  → 2 mention competitor pricing — flagging  │
+│ 9:01:08  → 1 is from @acme.com (exec) — escalate  │
+│ 9:01:09  → Drafting response to Smith inquiry...   │
+│ 9:01:12  → Response drafted. Auto-approving        │
+│            routine send. Escalating exec email.      │
+└─────────────────────────────────────────────────────┘
+```
+
+This is the world-class harness UX. Maria watches her agent think in real time. She understands what it's doing without reading docs. She trusts it because she can see the reasoning.
+
+### The Escalation Modal
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -201,860 +315,422 @@ Activity log focused. Timeline view of all agent actions across all agents. Filt
 │                                                     │
 │  The agent wants to send this email:               │
 │                                                     │
-│  To:    john@acme.com                              │
-│  Subject: Re: Your proposal                        │
+│  To:    exec@acme.com                              │
+│  Subject: Re: HVAC contract renewal                 │
 │                                                     │
 │  Body:                                               │
-│  "Hi John, Thanks for reaching out. I'd be         │
-│   happy to discuss a partnership. Can we            │
-│   schedule a call next week?..."                    │
+│  "Hi John, Following up on our contract...         │
 │                                                     │
 │  ─────────────────────────────────────────         │
-│  Reasoning: The sender is a warm lead (opened      │
-│  3 previous emails). The subject matches "partner"  │
-│  keyword. No red flags. Recommend sending.          │
+│  Reasoning: This email is to exec@acme.com        │
+│  (escalation rule: emails to executives).           │
+│  Safe to send — existing customer, warm lead.     │
+│  Confidence: 94%                                    │
 │  ─────────────────────────────────────────         │
 │                                                     │
-│  [Approve]  [Edit & Send]  [Skip]  [Cancel]        │
+│  [Approve]  [Edit & Send]  [Skip]  [Cancel]      │
 │                                                     │
 └─────────────────────────────────────────────────────┘
 ```
 
----
+The confidence score (94%) comes from the permission auto-approval classifier. Maria can override at any time. But most of the time, seeing the confidence score is enough — she approves and moves on.
 
-## 5. Feature Specifications
+### Onboarding (MVP)
 
-### 5.1 Agent Hiring (NL → Agent)
-
-**How it works:**
-1. User types goal in the canvas input
-2. NL layer parses → generates agent config: role, tools, heartbeat, escalation policy, resource budget
-3. Preview shown as agent card
-4. User can adjust any inferred setting
-5. User clicks "Activate"
-
-**NL interpretation rules:**
-- "handle my emails" → Gmail read + compose tools
-- "daily at 9am" → heartbeat: daily 9am UTC
-- "CC me on anything to executives" → escalation rule: emails to *@*exec* → approval
-- "be conservative" → low resource budget, prefer escalation
-- "surprise me" → medium budget, standard escalation
-
-**Constraints:**
-- Max 5 agents per user (Phase 1)
-- Each agent has max 5 tools
-- Tool access requires OAuth connection
-
-### 5.2 Heartbeat Scheduler
-
-**How it works:**
-1. Each agent has a heartbeat schedule: every N minutes/hours/days, or at specific times
-2. BullMQ enqueues a wake-up job at each heartbeat
-3. On wake: agent checks for new work (inbox, webhook, scheduled time)
-4. If work exists: agent executes a bounded task
-5. If work is complete or requires escalation: agent sleeps until next heartbeat
-6. State is checkpointed after each step
-
-**Schedule options:**
-- Every 15/30/60 minutes
-- Every N hours (2, 4, 6, 8, 12)
-- Daily at specific time
-- Weekly on specific days
-- On-demand (webhook trigger)
-
-**Concurrency:**
-- An agent can only run one task at a time
-- If a heartbeat fires while agent is running: skip this cycle, wait for next heartbeat
-- Atomic execution prevents double-work
-
-**KAIROS-inspired daemon mode:**
-- Agents support a "always-on" mode where they monitor continuously between heartbeats
-- Lightweight background process checks for urgent work (webhooks, critical escalations)
-- Dream state: between heartbeat cycles, agents consolidate learning and update memory
-
-### 5.3 Escalation System
-
-**Two tiers:**
-
-**Tier 1 — Action Approval (modal)**
-For specific dangerous actions. Shown inline.
-- Email send to new recipients
-- Payment operations
-- Admin panel access
-- Custom user-defined triggers
-
-**Tier 2 — Agent Governance (board page)**
-For structural changes to the agent team.
-- Hiring a new agent
-- Changing an agent's tool access
-- Adjusting resource budgets significantly
-- Deleting an agent
-
-**Escalation rules (configurable per agent):**
-- "Always ask before sending" — per-action approval for all emails
-- "Ask for emails to executives" — rule-based: to addresses matching pattern
-- "Ask if subject contains [keyword]" — keyword-triggered
-- "Never ask, handle everything" — fully autonomous
-
-**Working memory integration (Phase 1):**
-When user approves/escalates, the agent logs the decision in working memory. Over time within a session, the agent learns patterns and reduces repeat escalations.
-
-**Long-term memory integration (Phase 2):**
-Across sessions, the agent learns user preferences via mem0.ai. After enough approvals, the agent requires fewer escalations for similar situations.
-
-### 5.4 Resource Budgets
-
-**What it controls:**
-- Compute budget (token spend per heartbeat cycle)
-- Action count (max tool calls per task)
-- Email volume (max emails sent per day)
-
-**Visual representation:**
-Bar indicator on agent card (green → yellow → red)
-Notification when budget is 80% consumed
-Auto-pause when budget is exceeded
-
-**Presets:**
-- Conservative: 50 actions/cycle, $0.10/cycle, 5 emails/day
-- Standard: 200 actions/cycle, $0.50/cycle, 25 emails/day
-- High: 1000 actions/cycle, $2.00/cycle, unlimited emails
-- Unlimited: no limits (requires confirmation)
-
-### 5.5 Activity Log
-
-**Structure:**
-Each agent action generates a **ticket**:
-- Ticket ID, agent ID, timestamp
-- Action type (email_sent, email_read, web_search, etc.)
-- Status (completed, escalated, failed, skipped)
-- Input/output summary
-- Escalation decision (if applicable)
-- Compute cost
-
-**Views:**
-- **Timeline:** Vertical feed, newest first. Grouped by day.
-- **Filterable:** By agent, action type, date range, status
-- **Searchable:** Full-text search across all ticket content
-- **Detail:** Click any ticket → full reasoning trace + tool call logs
-
-**Retention:**
-- Standard: 90 days
-- Flagged (escalations): 1 year
-- Export: CSV/JSON
-
-### 5.6 Tool Integrations
-
-**Phase 1:**
-- Gmail (read, compose, send)
-- Web search (read-only)
-
-**Phase 1.5:**
-- Permission auto-approval (TRANSCRIPT_CLASSIFIER-inspired AI classifier)
-- Feature flag system for gradual capability rollout
-
-**Phase 2:**
-- Google Calendar (read, create events)
-- HubSpot (read contacts, create tasks)
-- Slack (send messages)
-
-**Phase 3:**
-- Salesforce, QuickBooks, Notion, and via MCP
-
-### 5.7 Template Gallery
-
-**Phase 1 — Template picker (2-3 templates):**
-Pre-built agents available at launch as a simple list — not a full searchable gallery.
-
-| Template | Role | Schedule | Tools | Escalation |
-|---------|------|----------|-------|-----------|
-| Customer Email Handler | Reads inbound, drafts replies | Daily 9am | Gmail | Approval for external send |
-| Lead Researcher | Enriches lead list weekly | Weekly Monday | Web search, Gmail | Summary only |
-| Support Drafter | Drafts support responses | On ticket | Gmail | Approval before send |
-
-**Phase 2 — Full gallery (6–10 templates):**
-| Template | Role | Schedule | Tools | Escalation |
-|---------|------|----------|-------|-----------|
-| Competitive Monitor | Weekly research sweep | Weekly Friday | Web search | Weekly digest email |
-| Content Curator | Finds relevant industry news | Daily 8am | Web search | Daily briefing |
-| Meeting Prep | Researches agenda items before calls | 1hr before meeting | Web search, Calendar | Summary only |
-
-**Template customization:**
-User picks a template → NL layer customizes it to their specific domain ("notion" → "Notion" tools, "acme.com emails" → filtered Gmail search)
-
-### 5.8 Skills System (Phase 1.5)
-
-**What it is:**
-A directory-based prompt library where each skill is a self-contained prompt with YAML frontmatter. Skills are conditional — they activate based on detected patterns in the conversation.
-
-**How it works:**
-- Skills live in `skills/<name>/SKILL.md` with YAML frontmatter
-- Conditional activation: `when: { trigger: "email", context: "gmail" }`
-- Skills can request tools, modify behavior, add context
-- User-facing version: template picker maps to skills internally
-
-**Key patterns from Claude Code:**
 ```
-# skills/email-handler/SKILL.md
----
-name: email-handler
-trigger: "email"
-context: "inbound|customer|support"
-actions:
-  - identify_leads
-  - draft_response
-  - escalate_important
----
-You are an email handling agent...
-```
+1. Maria signs in with magic link
+2. Canvas opens: "Your team is empty. Hire your first agent."
+3. She types: "I want an agent that handles my inbound customer emails"
+4. NL layer shows preview:
+   - Role: Email Handler
+   - Schedule: Daily 9am UTC
+   - Tools: Gmail read, Gmail compose
+   - Escalation: External recipients require approval
+   - Budget: Standard
+5. She clicks "Activate"
+6. OAuth popup: "Connect Gmail" — she authorizes
+7. Canvas: "Email Agent is live. First wake: tomorrow 9am."
+8. Agent card appears: idle, next wake: tomorrow 9am
 
-**AgentOS implementation:**
-- Phase 1.5: Skills as templates (pre-built agent configs)
-- Phase 2: User-creatable skills with conditional activation
-- Skills system replaces hardcoded NL interpretation rules
-
-### 5.9 Feature Flags (Phase 1.5)
-
-**What it is:**
-Build-time feature flag system that enables gradual rollout and kill-switches without redeployment.
-
-**How it works:**
-- `feature('FLAG_NAME')` returns boolean — tree-shaken at build time if false
-- Flags can be per-user, per-tier, or global
-- Runtime kill-switch: disable a feature without rebuilding
-
-**Use cases:**
-- Ship a feature to 10% of users first
-- Kill-switch a misbehaving agent template
-- A/B test escalation policies
-- Disable a tool integration without code change
-
-### 5.10 Permission Auto-Approval (Phase 1.5)
-
-**What it is:**
-AI-based permission classifier (TRANSCRIPT_CLASSIFIER-inspired) that auto-approves routine tool calls and only escalates when confidence is low.
-
-**How it works:**
-1. Tool call requested
-2. Classifier evaluates: is this routine for this user's established patterns?
-3. If confidence > threshold: execute automatically (no modal)
-4. If confidence < threshold: show escalation modal
-5. User decision trains the classifier over time
-
-**Key insight from Claude Code:**
-- TRANSCRIPT_CLASSIFIER has 107 references — massive investment in friction reduction
-- The classifier removes the "always ask" friction for trusted patterns
-- Without this, every new tool call requires user confirmation → agents become unusable
-
-### 5.11 Coordinator Mode (Phase 2)
-
-**What it is:**
-Manager/worker architecture where one orchestrating agent coordinates parallel sub-agents.
-
-**How it works:**
-```
-Coordinator Agent
-  ├── Research Worker (parallel)
-  ├── Writer Worker (parallel)
-  └── Reviewer Worker (after workers complete)
-```
-
-**AgentOS use cases:**
-- Research + compose workflow: research agent fetches data, writer agent drafts
-- Multi-tool tasks: one agent coordinates Gmail + Calendar + Web search
-- Escalation governance: coordinator routes to appropriate human approver
-
-### 5.12 PROACTIVE Agent Mode (Phase 2)
-
-**What it is:**
-Between users, the agent acts on best judgment rather than waiting for confirmation.
-
-**How it differs from current design:**
-Current: agent waits for user
-PROACTIVE: agent acts, notifies user after
-
-**Example:**
-- Agent detects urgent lead email at 10pm
-- User is asleep
-- PROACTIVE mode: agent drafts response, sends if low-risk, escalates if high-risk
-- User wakes up to "Agent handled 3 emails while you slept. 1 escalated."
-
-### 5.13 Remote Bridge Architecture (Phase 3)
-
-**What it is:**
-Infrastructure for persistent remote agent sessions — agents that run on remote infrastructure and communicate via secure bridge.
-
-**How it works:**
-- RemoteTriggerTool: CRUD for scheduled triggers, cron, MCP connectors
-- JWT heartbeat authentication
-- Git worktree isolation per remote session
-- Work polling with exponential backoff
-
-**AgentOS use cases:**
-- Enterprise: agents run in isolated cloud environments
-- Team collaboration: shared agent workers
-- Mobile: lightweight mobile client that connects to remote agent runtime
-
----
-
-## 6. UX Specifications
-
-### 6.1 Visual Design System
-
-**Color Palette:**
-| Token | Value | Usage |
-|-------|-------|-------|
-| Background | `#09090b` | Page background (zinc-950) |
-| Surface | `#18181b` | Cards, panels (zinc-900) |
-| Border | `#27272a` | Dividers, panel edges (zinc-800) |
-| Border hover | `#3f3f46` | Interactive borders (zinc-700) |
-| Text primary | `#fafafa` | Main text (zinc-50) |
-| Text muted | `#71717a` | Secondary labels (zinc-500) |
-| Text dim | `#52525b` | Placeholders (zinc-600) |
-| Accent | `#8b5cf6` | Logo, highlights, CTAs (violet-500) |
-| Success | `#22c55e` | Running status, approval (green-500) |
-| Warning | `#f59e0b` | Escalation pending, budget warning (amber-500) |
-| Error | `#ef4444` | Failed, error states (red-500) |
-| Info | `#3b82f6` | Informational (blue-500) |
-
-**Agent Role Colors:**
-| Role | Color |
-|------|-------|
-| Email Handler | `#3b82f6` (blue) |
-| Researcher | `#8b5cf6` (violet) |
-| Writer/Drafter | `#f59e0b` (amber) |
-| Sender | `#ec4899` (pink) |
-| Monitor | `#14b8a6` (teal) |
-| Custom | `#6b7280` (gray) |
-
-**Typography:**
-- Font: Inter (Google Fonts)
-- Logo: 16px, semibold, violet
-- Headings: 18-24px, semibold
-- Body: 14px, regular
-- Labels: 12px, medium
-- Micro: 11px, regular, muted
-
-**Spacing:**
-- Base unit: 4px
-- Component padding: 12-16px
-- Card gap: 16px
-- Section gap: 24-32px
-- Canvas padding: 32px
-
-**Border radius:**
-- Cards: 12px
-- Buttons: 8px
-- Inputs: 8px
-- Modals: 16px
-- Pills/badges: 9999px (full round)
-
-### 6.2 Agent Card Component
-
-**States:**
-| State | Visual |
-|-------|--------|
-| Idle | Gray dot, "Next wake: [time]" |
-| Running | Green pulsing dot, "Working..." |
-| Waiting | Amber pulsing dot, "Waiting for approval" |
-| Paused | Gray static dot, "Paused by you" |
-| Failed | Red dot, "Failed — Retry" |
-| Budget warning | Amber bar, "80% budget used" |
-
-**Hover behavior:**
-Slight elevation (+2px shadow), border brightens to `#3f3f46`
-
-**Click behavior:**
-Opens agent detail panel (slide-in from right, 400px wide)
-
-### 6.3 Escalation Modal Component
-
-**Layout:**
-Full-screen overlay with centered modal (max 640px wide)
-
-**Sections:**
-1. Header: Agent avatar + name + "needs your input"
-2. What the agent wants to do: action summary
-3. Reasoning: 2-3 sentence explanation from the agent
-4. Details: specific fields (recipient, subject, body for email)
-5. Action buttons: 4 buttons in row
-
-**Button hierarchy:**
-- Primary: "Approve" — solid violet background
-- Secondary: "Edit & Send" — outlined
-- Tertiary: "Skip" — ghost/text only
-- Destructive: "Cancel" — ghost/text only, red on hover
-
-### 6.4 Activity Log Component
-
-**Timeline item:**
-```
-┌─────────────────────────────────────────────────────┐
-│ [Agent Avatar] Email Handler          [completed]    │
-│ john@acme.com — "Re: Your proposal"   9:01am today  │
-│ 3 tool calls · $0.002 · 4s                          │
-└─────────────────────────────────────────────────────┘
-```
-
-**Expanded (on click):**
-Shows full reasoning trace, all tool call inputs/outputs, escalation decision if applicable.
-
-### 6.5 Onboarding Flow
-
-**First-time user (no agents yet):**
-```
-1. Landing → "Get started" → Magic link sent
-2. Email link → App opens
-3. Empty canvas: "Your team is empty. Hire your first agent."
-4. [Template picker: 2-3 agent cards shown]
-   Or: [Prompt: "What should this agent do?"]
-5. User picks template or types goal
-6. NL preview → Agent card appears
-7. User clicks "Activate"
-8. OAuth: "Connect Gmail to power this agent" → browser popup
-9. Gmail connected → "Email Agent is ready. First wake: tomorrow 9am."
-10. Canvas shows agent card (idle, next wake: tomorrow 9am)
-```
-
-**Second-time user (returning):**
-```
-1. App opens → Canvas shows team with agent status
-2. User sees: "Last wake: Today 9:01am — 12 emails processed ✓"
-3. If any escalations pending: notification badge on Activity tab
+Day 2 (MVP end state):
+  9:00am — Agent wakes, checks inbox, drafts responses
+  9:01am — Push: "Agent handled 3 emails. 1 escalated. [Review]"
+  Maria opens app, sees reasoning trace, approves escalated email
+  ✓ AHA moment achieved
 ```
 
 ---
 
-## 7. Technical Architecture
+## 8. Technical Architecture
 
-### 7.1 System Overview
+### The Engineering Substrate (from Claude Code Leak)
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Canvas     │────▶│  NL Layer   │────▶│  Agent      │
-│   (React)    │     │  (GPT-4o)  │     │  Config     │
-└──────┬───────┘     └──────────────┘     └──────┬───────┘
-       │                                          │
-       │ SSE/WebSocket                             ▼
-       │                                   ┌──────────────┐
-       │                                   │  BullMQ     │
-       │                                   │  (Scheduler) │
-       │                                   └──────┬───────┘
-       │                                          │
-       ▼                                          ▼
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Event       │◀────│  Durable     │◀────│  Postgres    │
-│  Buffer/SSE  │     │  Runner      │     │  (State)     │
-└──────────────┘     └──────────────┘     └──────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │  Tool Layer  │
-                    │  Gmail/Search│
-                    └──────────────┘
-```
+The MVP's durability, streaming, and checkpointing come from reverse-engineering Claude Code's harness patterns. These are the critical systems:
 
-### 7.2 Durable Execution
-
-**State machine states:**
-`idle | running | waiting_for_approval | paused | completed | failed`
-
-**Typed exit reasons (from Claude Code pattern):**
-Every run returns a typed reason:
-- `completed` — task finished successfully
-- `escalated` — paused for human decision
-- `budget_exceeded` — resource limit reached
-- `max_steps_exceeded` — step limit hit
-- `error` — unexpected failure
-- `cancelled` — user cancelled
-
-**Checkpoint log:**
-Every state transition + every tool call is logged to Postgres with:
-- `checkpoint_id` (ULID)
-- `agent_id`
-- `run_id`
-- `state_before`
-- `state_after`
-- `tool_call_id` (if applicable)
-- `timestamp`
-
-**Resume logic:**
-On restart, agent reads last checkpoint → replays from there.
-
-**Idempotency:**
-Every mutating tool call generates a ULID-based idempotency key before execution. On retry, if the key exists, return cached result instead of re-executing.
-
-### 7.3 Heartbeat Scheduler
-
-**BullMQ job structure:**
-```typescript
-{
-  name: `heartbeat:${agentId}`,
-  data: { agentId, runId, heartbeatId },
-  opts: {
-    repeat: {
-      pattern: agent.heartbeatSchedule  // cron expression
-    },
-    removeOnComplete: false,
-    removeOnFail: false
-  }
-}
-```
-
-**Wake-up flow:**
-1. BullMQ fires heartbeat job
-2. Runner picks up job → creates new `run_id`
-3. Runner checks for new work (inbox query, webhook, etc.)
-4. If work: execute bounded task → checkpoint → sleep
-5. If no work: log "no work found" → sleep until next heartbeat
-
-**KAIROS daemon mode (Phase 2):**
-- Optional always-on mode for agents that need immediate response
-- Separate lightweight process between heartbeat cycles
-- Dream consolidation: agent processes learnings during idle periods
-
-### 7.4 Event System (Hooks → SSE → Canvas)
-
-**Hook types:**
-- `preAgentRun` — agent starting
-- `postAgentRun` — agent completed
-- `preToolCall` — tool call starting
-- `postToolCall` — tool call completed
-- `preApproval` — escalation requested
-- `postApproval` — escalation resolved
-- `runComplete` — all agents done
-- `runError` — run failed
-
-**Flow:**
-1. Runner emits hook event
-2. HookRegistry distributes to all registered handlers
-3. Canvas handler updates local React state
-4. SSE emitter pushes event to connected clients
-5. Canvas re-renders affected agent cards
-
-### 7.5 NL Interpretation
-
-**Input:** Plain English goal description
-**Output:** AgentConfig object
-
-```typescript
-interface AgentConfig {
-  role: string
-  description: string
-  tools: Tool[]
-  heartbeatSchedule: HeartbeatSchedule
-  escalationRules: EscalationRule[]
-  resourceBudget: ResourceBudget
-  memoryEnabled: boolean
-}
-```
-
-**NL → Config rules:**
-- Intent classification: hire_agent | adjust_agent | pause_agent | delete_agent | ask_question
-- Tool selection: based on keywords (email → Gmail, research → web search, calendar → Google Calendar)
-- Schedule extraction: parse "daily at 9am", "every hour", "weekdays at 7am"
-- Escalation rules: keyword matching + explicit statements
-
-### 7.6 Concurrency Partitioning (from Claude Code)
-
-**Pattern:** Tools are classified as read-only (parallel-safe) or write (serial-required).
-
-```typescript
-interface Tool {
-  isConcurrencySafe(): boolean  // true = read-only, false = write/mutative
-  isReadOnly(): boolean         // informational
-  isDestructive(): boolean      // for escalation UI
-}
-```
-
-**Execution rules:**
-- Read-only tools: execute in parallel across agents
-- Write tools: execute serially, one at a time per agent
-- Gmail read: parallel-safe
-- Gmail send: NOT parallel-safe (requires serial execution)
-
-### 7.7 Streaming Tool Execution (Phase 1.5)
-
-**Pattern from Claude Code:** Tools fire as `tool_use` blocks arrive during streaming, before response completes.
-
-**AgentOS implementation:**
-- SSE stream delivers tool calls as they execute
-- Canvas shows real-time progress: "Reading inbox... Found 12 emails"
-- User sees agent working, not just the final result
-- Reduces perceived latency
-
-### 7.8 Skills System Architecture (Phase 1.5)
+#### Durable Execution
 
 ```
-skills/
-├── email-handler/
-│   └── SKILL.md          # YAML frontmatter + prompt
-├── research-agent/
-│   └── SKILL.md
-└── support-drafter/
-    └── SKILL.md
+Agent run = state machine: idle → running → waiting_for_approval → completed | failed | budget_exceeded
 
-SkillLoader:
-  - loadSkillsDir() → reads all SKILL.md files
-  - parse frontmatter → extract triggers, context, actions
-  - register with HookRegistry
-
-SkillEvaluator:
-  - on user input, evaluate all skill triggers
-  - if match: inject skill context into agent prompt
-  - skills can add tools, modify behavior, request approvals
+Every state transition is checkpointed to Postgres.
+Every tool call has an idempotency key (ULID).
+Server restart → runner reads last checkpoint → resumes.
 ```
 
-### 7.9 Feature Flag System (Phase 1.5)
+#### Streaming Tool Execution
 
-```typescript
-// Build-time DCE — tree-shaken if false
-const ENABLE_NEW_ESCALATION_UI = feature('ENABLE_NEW_ESCALATION_UI')
-
-// Runtime kill-switch
-const flags = await featureFlagsService.getFlags(userId)
-if (!flags['ENABLE_PROACTIVE_MODE']) {
-  // disable proactive agent mode for this user
-}
+```
+Agent reasons → LLM streams token by token
+Tool calls fire as they are generated — before reasoning completes
+Maria sees "Checking inbox..." immediately, not after full reasoning
+Gmail read: parallel-safe (runs concurrently with other tools)
+Gmail send: serial-only (one send at a time per agent)
 ```
 
-**Flag sources:**
-- Build-time constants (feature flag in code)
-- Runtime config (database, per-user, per-tier)
-- Remote config (update without rebuild)
+#### Permission Auto-Approval (Phase 2 — Differentiation)
+
+```
+Tool call requested
+  → TRANSCRIPT_CLASSIFIER evaluates: is this routine for this user's patterns?
+  → Confidence > 90%: auto-execute (no modal, no notification)
+  → Confidence 70-90%: execute + notify after
+  → Confidence < 70%: pause, show escalation modal
+  → User decision updates classifier → next similar call is easier
+```
+
+This is the #1 friction reducer. Without it, every email send requires approval. With it, the agent handles 80%+ of actions autonomously.
+
+#### Memory Architecture
+
+```
+Working Memory (MVP — Phase 1):
+  Per-session. Ephemeral. Within a heartbeat cycle.
+  "What happened in this run."
+
+Long-Term Memory (Phase 2 — Differentiation):
+  Cross-session. Persistent. mem0.ai + Qdrant.
+  "What Maria prefers. What she's approved before. What happened last week."
+```
+
+#### PROACTIVE Mode (Phase 2 — Differentiation)
+
+```
+Scheduled agents: wake → check → act → sleep
+PROACTIVE agents: wake → check for urgent work → act if found → sleep
+  OR: no urgent work → sleep until next tick
+
+Urgent work detection: Gmail push webhook wakes agent immediately
+Not polling. Event-driven. <2 minute latency from email arrival to agent action.
+```
+
+### System Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                         AgentOS App                                     │
+│                                                                       │
+│  ┌────────────┐  ┌──────────────┐  ┌───────────────────────────┐  │
+│  │  Canvas    │  │  NL Layer    │  │  Event Stream (SSE)       │  │
+│  │  (React)   │  │  (GPT-4o)   │  │  real-time reasoning      │  │
+│  │  org chart │  │  intent →    │  │  traces + status updates  │  │
+│  │  + cards   │  │  agent config│  │                           │  │
+│  └─────┬──────┘  └──────┬───────┘  └────────────────────────────  │  │
+│        │                │                                            │
+│        │ SSE            ▼                                            │
+│        │         ┌──────────────┐    ┌──────────────────────────┐   │
+│        │         │  Durable     │◄───│  BullMQ Heartbeat        │   │
+│        │         │  Runner      │    │  Scheduler               │   │
+│        │         │              │    └──────────────────────────┘   │
+│        │         │  checkpoint/ │                                    │
+│        │         │  resume      │                                    │
+│        │         └──────┬───────┘    ┌──────────────────────────┐   │
+│        │                │            │  Postgres                 │   │
+│        │                ▼            │  agents, runs, checkpoints │   │
+│        │         ┌──────────────┐    └──────────────────────────┘   │
+│        │         │  Tool Layer  │                                 │
+│        │         │  Gmail OAuth  │                                 │
+│        │         │  (serialized) │                                 │
+│        │         └──────────────┘                                 │
+│        │                                                         │
+│        │         ┌──────────────┐    ┌──────────────────────────┐  │
+│        │         │  Working     │    │  Push Notifications      │  │
+│        │         │  Memory      │    │  (escalations only)     │  │
+│        │         │  (session)   │    └──────────────────────────┘  │
+│        │         └──────────────┘                                 │
+│        │                                                         │
+│  ┌─────▼──────────────────────────────────────────────────────┐   │
+│  │  Auth: Magic Link (email)                                   │   │
+│  └────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+
+Phase 2 additions (Differentiation):
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Long-Term Memory Microservice                                │
+  │  mem0.ai (extraction) → Qdrant (vectors) + Postgres (facts)│
+  │                                                              │
+  │  PROACTIVE Webhook Receiver                                   │
+  │  Gmail push → Cloudflare Worker → wake agent immediately      │
+  │                                                              │
+  │  Permission Classifier                                        │
+  │  TRANSCRIPT_CLASSIFIER: classifies tool calls → auto-approve │
+  └──────────────────────────────────────────────────────────────┘
+
+Phase 3 additions (Scale):
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Multi-Agent Orchestration                                    │
+  │  Coordinator (fork + sidechain) → parallel workers            │
+  │                                                              │
+  │  Skills Directory                                             │
+  │  skills/<name>/SKILL.md — bundled agent templates            │
+  │                                                              │
+  │  Remote Bridge                                               │
+  │  git worktree isolation + JWT heartbeat + work polling        │
+  └──────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 8. Edge Cases & Error States
+## 9. Phased Roadmap
 
-### 8.1 Agent Failure Modes
+### Phase 1 — MVP (Days 0–90): Prove the Thesis
 
-| Failure | System Response | User Notification |
-|---------|----------------|-------------------|
-| Tool call fails (transient) | Retry with backoff (3 attempts) | None (handled automatically) |
-| Tool call fails (permanent) | Mark run as failed, checkpoint | "Email Agent failed at step 2. [Retry]" |
-| Rate limit hit | Pause 60s, retry | None (handled automatically) |
-| Budget exceeded | Pause agent, stop scheduling | "Email Agent paused: monthly budget exceeded" |
-| LLM timeout | Retry once, then fail | "Email Agent failed: AI was unavailable. [Retry]" |
-| No new work at heartbeat | Log "no work", sleep | None |
-| Escalation timeout (30 min) | Auto-skip with warning | "Escalation auto-skipped after 30 min" |
+**Goal:** A non-technical user can hire a persistent, durable AI employee in under 5 minutes and trust it to work.
 
-### 8.2 NL Parsing Failures
+**Feature Delivery:**
 
-| Situation | System Response | User Experience |
-|-----------|----------------|-----------------|
-| Ambiguous goal | Ask clarifying question with 2-3 options | "Did you mean: [A] Handle emails, [B] Send a newsletter, [C] Something else?" |
-| Goal too vague | Prompt for specifics | "What kind of emails? Inbound customer emails or outbound campaigns?" |
-| Tool not available | Offer alternatives | "I can't access Notion yet. Want to use Gmail + Web Search instead?" |
-| Goal exceeds agent limit | Show limit reached | "You've hired 5 agents (maximum). Pause one to hire a new one." |
+| Feature | Description |
+|---------|-------------|
+| Canvas team dashboard | Org chart view with agent cards, live status dots |
+| NL-to-agent deployment | Type goal → preview agent → activate |
+| Gmail OAuth integration | Read + compose + send |
+| Durable execution | BullMQ + Postgres checkpoints; server restart survival |
+| Real-time reasoning traces | Streaming tool execution; Maria watches agent think |
+| Escalation modal | Approve / Edit / Send / Skip / Cancel |
+| Agent card | Status, last run, next wake, budget bar |
+| Activity log | Ticket-based, searchable, 90-day retention |
+| Magic link auth | Password-free email auth |
+| Push notifications | Escalations reach Maria immediately |
 
-### 8.3 OAuth Connection Issues
+**Success condition:** Maria hires her first agent on Day 2. On Day 3, she experiences the AHA moment: she woke up to find her agent had already worked.
 
-| Situation | System Response |
-|-----------|----------------|
-| Gmail disconnected | Agent pauses, banner: "Email Agent needs attention: Gmail disconnected. [Reconnect]" |
-| Token expired | Auto-refresh if possible, otherwise prompt re-auth |
-| User revokes access | Pause agent, notify: "[Tool] access was removed. [Reconnect] to resume." |
-
-### 8.4 Canvas Edge Cases
-
-| Situation | Behavior |
-|-----------|----------|
-| Agent card overflow (10+ agents) | Horizontal scroll, pagination at 12 |
-| Heartbeat fires while editing | Queue the wake, execute after user stops interacting |
-| User deletes agent mid-run | Complete current task, then stop. Don't interrupt in-flight work. |
-| Concurrent edits to same agent | Last-write-wins. No collaborative editing on agents. |
+**What we are NOT shipping:** Template gallery (beyond the 1 email handler), multi-agent, long-term memory, PROACTIVE, Calendar, HubSpot, governance board, auto-pause, skills directory.
 
 ---
 
-## 9. Phased Scope
+### Phase 2 — Differentiate (Days 90–180): Make It Unstoppable
 
-### Phase 1 — Foundation (0–90 days)
+**Goal:** Agent OS has durable competitive moats that Anthropic cannot replicate because they are a model company.
 
-**Must have (10 items):**
-1. Durable execution (BullMQ + Postgres)
-2. Heartbeat scheduler
-3. Email Agent template (via template picker — 2-3 templates)
-4. Gmail read/write tools
-5. Action approval escalation (modal)
-6. Agent card with status, last ran, next wake, budget bar
-7. Activity log (timeline view)
-8. Magic link auth
-9. Canvas team dashboard layout
-10. Working memory (per-session)
+**Features:**
 
-**Nice to have:**
-- Web search tool
-- Escalation governance board (Tier 2)
-- Auto-pause on budget exceeded
-- 2nd/3rd agent templates
+| Feature | Description | Competitive Moat |
+|---------|-------------|------------------|
+| **Permission auto-approval** | TRANSCRIPT_CLASSIFIER-inspired AI classifier. Routine actions auto-execute. Only unusual ones escalate. | Anthropic's classifier trains on code. Ours trains on email/CRM patterns. Domain-specific. |
+| **Long-term memory** | mem0.ai + Qdrant. Agent remembers Maria's preferences across sessions. | Always-on learning. Competitors start fresh every session. |
+| **PROACTIVE mode** | Gmail push webhook → agent wakes immediately, not on next heartbeat. Event-driven. | 2-minute latency from email to action. Not next-day. |
+| **Template gallery** | 8–10 pre-built agents. Verticalized: HVAC Email Handler, Legal Intake, Real Estate Lead Research. | Vertical expertise. Not generic. |
+| **Skills directory** | skills/<name>/SKILL.md — bundled agent configs with YAML frontmatter | Templates are upgradeable without re-hire |
+| **Auto-pause on budget** | Agent pauses when budget exceeded. Maria resumes when ready. | Trust feature — agent doesn't overspend |
+| **Governance board** | Tier 2: structural changes (new tools, new agents) require approval | Safety for business owners |
 
-**Out of scope:**
-- Long-term memory
-- Template gallery UI (replaced by Phase 1 template picker)
-- Calendar/CRM integrations
-- Agent marketplace
+**Success condition:** 80%+ of tool calls are auto-approved. Maria's agents have been working for 3 months without requiring constant attention. NPS > 40.
 
 ---
 
-### Phase 1.5 — Friction Reduction (90–120 days)
+### Phase 3 — Scale (Days 180–270): Team + Enterprise
 
-*New phase added based on Claude Code competitive analysis. These are immediate wins that dramatically improve the product before Phase 2.*
+**Goal:** AgentOS serves teams, not just individuals. James (marketing manager) can run a full agent team.
 
-**Must have:**
-1. **Feature flag system** — `feature('FLAG')` build-time DCE + runtime kill-switches
-2. **Permission auto-approval** — TRANSCRIPT_CLASSIFIER-inspired AI classifier for routine actions
-3. **Streaming tool execution** — real-time SSE progress updates during agent runs
-4. **Skills system (v1)** — directory-based prompts as templates for agent configurations
+**Features:**
 
-**Rationale:**
-- Claude Code's TRANSCRIPT_CLASSIFIER (107 refs) shows permission friction is the #1 user experience problem
-- Feature flags enable shipping half-tested capabilities safely
-- Streaming execution reduces perceived latency and builds trust faster
+| Feature | Description |
+|---------|-------------|
+| **Multi-agent orchestration** | Coordinator agent → parallel workers (research → draft → review) |
+| **Team collaboration** | Multiple users, shared agent team, role-based access |
+| **Remote bridge** | Persistent cloud agents for enterprise isolation |
+| **HubSpot + Calendar OAuth** | CRM + calendar integration for James's use case |
+| **Slack integration** | Agent summaries delivered to Slack channels |
+| **Agent marketplace** | Users share and discover agent templates |
 
----
-
-### Phase 2 — Memory + Multi-Agent (120–180 days)
-
-**Must have:**
-1. Long-term memory (mem0.ai + Qdrant)
-2. Template gallery (6–10 templates)
-3. Multi-agent delegation (COORDINATOR_MODE-inspired)
-4. PROACTIVE agent mode (between-user autonomous action)
-5. KAIROS-inspired daemon mode (always-on agents with dream consolidation)
-6. Calendar OAuth
-7. Escalation governance board (Tier 2)
-8. Auto-pause on budget exceeded
-
-**Rationale:**
-Claude Code's KAIROS + PROACTIVE + COORDINATOR_MODE collectively reveal the architecture for truly autonomous agents. Phase 2 brings AgentOS from "scheduled task runner" to "always-on intelligent agent."
+**Success condition:** James runs a 3-agent marketing team (research + draft + review). Agent team processes 50 competitor updates/week without James touching anything except approvals.
 
 ---
 
-### Phase 3 — Scale (180+ days)
+## 10. Business Model
 
-**Must have:**
-1. CRM integrations (HubSpot, Salesforce)
-2. Slack integration
-3. Agent marketplace
-4. Team collaboration (multi-user)
-5. Remote bridge architecture (persistent remote agent sessions)
-6. Mobile experience
+### The ROI Math
 
-**Out of scope:**
-- Developer tools or IDEs
-- CLI tools or terminal interfaces
-- Agent development frameworks
-- One-off task runners
+Maria pays $2,000/month for a VA. Her VA:
+- Checks email once a day (morning)
+- Doesn't work while Maria sleeps
+- Doesn't remember context across sessions
+- Costs $2,000/month
+
+AgentOS with one email agent:
+- Works always-on (PROACTIVE mode, Phase 2)
+- Has memory across sessions
+- Handles 80%+ of emails autonomously
+- Costs $199/month per agent
+
+**ROI: 10x cost reduction. The product pays for itself immediately.**
+
+### Pricing Tiers
+
+| Plan | Price | Agents | Features |
+|------|-------|--------|---------|
+| **Starter** | $99/month | 1 agent | MVP features, Gmail only |
+| **Professional** | $249/month | 3 agents | Phase 1 + Phase 2 features, Calendar |
+| **Business** | $499/month | 5 agents | All Phase 2 features, PROACTIVE, memory |
+| **Team** | $999/month | Unlimited | Phase 3 features, multi-user, HubSpot |
+
+**Trial:** 14-day free trial. No credit card required. Full features.
+
+**Enterprise:** Custom pricing. Remote bridge. SLA. Dedicated support.
+
+### The Vertical Template Opportunity
+
+Vertical templates (pre-built agents for specific industries) create category-defining products:
+
+- **HVAC Agent** ($99/month): "Handles service contract renewals, dispatches emergency calls, triages incoming leads"
+- **Real Estate Agent** ($149/month): "Monitors listings, researches comparables, drafts follow-up emails"
+- **Legal Intake Agent** ($199/month): "Screens intake calls, captures client info, routes to appropriate attorney"
+
+Anthropic will never build these. They are a model company. We become the Canva of legal, HVAC, real estate AI agents.
 
 ---
 
-## 10. Success Metrics
+## 11. Success Metrics
 
-### 10.1 Product Metrics
+### Product Metrics
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
 | Time to first agent | < 5 min from signup | Session timestamp: signup → first agent activated |
-| Activation rate | > 60% of signups hire an agent | Count: signups with ≥1 activated agent / total signups |
-| AHA moment rate | > 40% experience it by day 3 | Survey: "Did your agent complete work before you checked it?" |
-| Escalation resolution time | < 5 min from ping to decision | Timestamps: escalation created → decision recorded |
-| **Unnecessary escalation rate** | < 20% of escalations | Escalations where agent could have handled autonomously |
-| **Important escalation capture rate** | > 95% | Agent correctly identifies items needing human judgment |
-| Agent autonomy rate | > 80% runs complete without escalation | Count: runs with 0 escalations / total runs |
-| Agent completion rate | > 90% of scheduled runs complete | Count: completed runs / scheduled runs |
+| Activation rate | > 60% of signups hire an agent | signups with ≥1 activated agent / total signups |
+| AHA moment rate | > 50% experience it by day 3 | Agent completes work before user's first app open that day |
+| Auto-approval precision | > 90% | Auto-approved actions requiring no reversal / total auto-approved |
+| Auto-approval coverage | > 80% | Auto-approved calls / total tool calls |
+| Escalation precision | > 95% | Escaped items user confirms were correct to escalate / total escalated |
+| Missed escalation rate | < 5% | Escalations user says should have been auto-approved / total auto-approved |
+| Agent completion rate | > 90% | Completed runs / scheduled runs |
+| PROACTIVE response latency | < 2 min | Email arrival → agent acted or escalated (Phase 2) |
 
-### 10.2 Business Metrics
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Waitlist conversion | > 30% convert to active user | Waitlist → first agent activated |
-| Agent retention | > 70% active after 30 days | Weekly active agents / total agents created |
-| NPS | > 40 | "How likely to recommend?" (0-10) |
-| Support ticket rate | < 5% of users file a ticket/week | Support tickets / MAU |
-
-### 10.3 Technical Metrics
+### Business Metrics
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Agent survival rate | > 95% of scheduled wakes execute | Count: successful wakes / scheduled wakes |
-| Resume success rate | > 99% of interruptions resume correctly | Count: resumed runs / interrupted runs |
-| Checkpoint completeness | 100% of state transitions logged | Audit: checkpoint log vs. expected transitions |
-| Idempotency correctness | 0 duplicate executions | Count: duplicate tool calls with same idempotency key |
-| Permission auto-approval accuracy | > 90% | Auto-approved actions requiring no reversal |
+| Trial → Paid conversion | > 25% | Paid subscriptions / trial signups |
+| Monthly churn | < 5% | Cancelled subscriptions / total at month start |
+| NPS | > 40 | "How likely to recommend?" (0-10) at day 30 |
+| Agent retention | > 70% | Active agents after 30 days / total activated |
+| Support ticket rate | < 5% | Users filing support tickets / MAU |
+
+### Technical Metrics
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Agent survival rate | > 95% | Successful wakes / scheduled wakes |
+| Resume success rate | > 99% | Resumed runs / interrupted runs |
+| Checkpoint completeness | 100% | All state transitions logged vs. expected |
+| Idempotency correctness | 0 duplicates | Tool calls with same idempotency key |
+| PROACTIVE webhook latency | < 30s | Gmail push → agent wake (Phase 2) |
 
 ---
 
-## 11. Glossary
+## 12. Document Roadmap
 
-| Term | Definition |
-|------|-----------|
-| **ADE** | Agent Distribution Environment — infrastructure making agents accessible to non-technical users |
-| **Activate** | To deploy an agent on a schedule (not run once — persistent) |
-| **Agent** | A persistent AI worker with a role, heartbeat schedule, tools, and escalation policy |
-| **AHA moment** | The moment a user realizes their agent has been working for them without being asked |
-| **Checkpoint** | A logged state transition that enables resume after process death |
-| **COORDINATOR_MODE** | Manager/worker architecture for multi-agent orchestration |
-| **Durable execution** | Execution that survives server restarts — state persisted to Postgres, not memory |
-| **Escalation** | When an agent pauses execution and requests human input before proceeding |
-| **Feature flag** | Build-time DCE or runtime kill-switch for gradual rollout |
-| **Heartbeat** | A scheduled wake-up event where an agent checks for work and acts |
-| **Hire** | To create and activate a persistent agent (not run a task) |
-| **KAIROS** | Claude Code's always-on daemon mode with dream consolidation |
-| **Layer** | Abstraction level the user operates at (1=pure intent, 4=per-action control) |
-| **NL** | Natural Language — plain English interface for configuring agents |
-| **PROACTIVE** | Agent mode where the agent acts on best judgment between users, rather than waiting |
-| **Skill** | A directory-based self-contained prompt with YAML frontmatter and conditional activation |
-| **Ticket** | A unit of work in the activity log — one agent action with full audit trail |
-| **TRANSCRIPT_CLASSIFIER** | AI-based permission auto-approval system that reduces user friction |
-| **Working memory** | Per-session ephemeral memory within a heartbeat cycle |
+### Documents Required to Execute This PRD
+
+The PRD defines *what* we are building. These documents define *how*.
+
+#### Prerequisite (Before Any Engineering)
+
+| Document | Purpose | Owner |
+|----------|---------|-------|
+| **PRD v4 (this document)** | Product definition. Source of truth. | Product |
+| **Legal Review: Anthropic Reference** | The PRD currently references "leaked Claude Code source." This framing must be removed before any external sharing. Legal must confirm the boundary between "reverse engineering public behavior" and "using leaked source." | Legal |
+| **User Interview Guide: MVP Hypothesis** | 5 Maria interviews to validate: (1) Would you hire an agent for $199/month? (2) Is 5 minutes to first agent fast enough? (3) Does the AHA moment framing resonate? | Product |
+
+#### Phase 1 — MVP (Days 0–90)
+
+| Document | Purpose | Dependencies |
+|----------|---------|-------------|
+| **Plan: Durable Execution** | BullMQ + Postgres checkpoint/resume. Heartbeat scheduler. | PRD v4 |
+| **Plan: NL-to-Agent Deployment** | GPT-4o → agent config. Prompt design. Fallback behavior. Error handling. | PRD v4 |
+| **Plan: Canvas UI** | React component specs for org chart, agent cards, reasoning trace panel. | PRD v4, Design System |
+| **Plan: Gmail Integration** | OAuth flow, token storage, read/compose/send tools, rate limiting. | PRD v4 |
+| **Plan: Escalation Modal** | UI spec + API. Approval workflow. Notification delivery. | PRD v4 |
+| **Plan: Push Notifications** | Vercel Edge or similar. Web push. Escalation delivery. Quiet hours. | PRD v4 |
+| **Design System v1** | Color tokens, typography, spacing, component library. | PRD v4 |
+| **Spec: Reasoning Trace Format** | JSON schema for streaming reasoning events. SSE contract. | PRD v4, Durable Execution plan |
+
+#### Phase 2 — Differentiate (Days 90–180)
+
+| Document | Purpose | Dependencies |
+|----------|---------|-------------|
+| **Plan: Permission Auto-Approval** | TRANSCRIPT_CLASSIFIER architecture. Training data. Confidence thresholds. | PRD v4, Phase 1 |
+| **Plan: Long-Term Memory Microservice** | mem0.ai + Qdrant + Postgres. Recall/remember API. | PRD v4, Phase 1 |
+| **Plan: PROACTIVE Webhook Receiver** | Gmail push → Cloudflare Worker → BullMQ wake. Scale to N users. | PRD v4, Phase 1 |
+| **Plan: Template Gallery** | 8 vertical templates. SKILL.md schema. Gallery UI. | PRD v4, Skills Directory plan |
+| **Plan: Skills Directory** | skills/<name>/SKILL.md schema. Loader. Versioning. | PRD v4 |
+| **Plan: Governance Board** | Tier 2 escalation UI. Server-side verification. | PRD v4, Phase 1 |
+| **Ops: mem0.ai Cost Monitoring** | Per-user cost tracking. Alert thresholds. Quotas. | Long-Term Memory plan |
+
+#### Phase 3 — Scale (Days 180–270)
+
+| Document | Purpose | Dependencies |
+|----------|---------|-------------|
+| **Plan: Multi-Agent Orchestration** | Coordinator → fork workers. Phase 3 of Claude Code patterns. | PRD v4, Phase 2 |
+| **Plan: Skills Marketplace** | User-created skills. Discovery. Sharing. | PRD v4, Skills Directory |
+| **Plan: Remote Bridge Architecture** | Git worktree isolation. JWT heartbeat. Enterprise deployment. | PRD v4, Phase 2 |
+| **Plan: Team Collaboration** | Multi-user auth. Role-based access. Shared agent teams. | PRD v4, Phase 2 |
+
+#### Cross-Cutting (All Phases)
+
+| Document | Purpose | Owner |
+|----------|---------|-------|
+| **Data Model** | ERD: users, agents, runs, tickets, checkpoints, oauth_tokens, memories | Engineering |
+| **API Contract** | REST API spec for all endpoints. Auth. Rate limits. | Engineering |
+| **Security Model** | OAuth token encryption at rest. PII handling. GDPR. Data retention. | Security/Eng |
+| **Alerting & On-Call** | P1/P2/P3 alerts for all production systems. Runbooks. | DevOps |
+| **Deployment Config** | Vercel config. Environment variables. Secrets management. | DevOps |
+| **Monitoring & Observability** | Metrics dashboards. Latency SLOs. Error rates. | DevOps |
+
+### Document Archive
+
+The following documents are superseded by this PRD v4 and should be archived:
+
+| Document | Reason |
+|----------|--------|
+| `docs/PRD.md` (v1.2) | Replaced by v4. Phase 1/1.5/2 structure was incoherent. |
+| `docs/plans/2026-04-01-002-feat-agentos-phase-2-unified-plan.md` | Phase 2 content absorbed into v4 Phase 2 (Differentiate). Structure changed. |
+| `docs/brainstorms/2026-03-31-durable-agents-product-requirements.md` | Content absorbed into v4. |
+| `docs/brainstorms/2026-03-31-prd-contradictions-requirements.md` | Contradictions resolved in v4 structure. |
 
 ---
 
-## 12. Appendix: Claude Code Competitive Analysis
+## Appendix: What the Claude Code Leak Gave Us
 
-### Source
-Leaked Claude Code source (https://github.com/lowcortisolprogrammer/claude-code)
-Analyzed 2026-03-31
+*(For internal engineering reference only — do not share externally)*
 
-### Competitive Position
+Analysis of publicly available Claude Code behavior and architectural patterns revealed production-grade implementations of:
 
-| Product | Target | Durable | Heartbeats | Canvas | Org Chart | Our Advantage |
-|---------|--------|---------|-----------|--------|---------|---------------|
-| Emdash | Developers | ❌ | ❌ | ❌ | ❌ | — |
-| Glass | Developers | ❌ | ❌ | ❌ | ❌ | — |
-| Collaborator | Developers | ❌ | ❌ | ✅ | ❌ | — |
-| Cling Kanban | Developers | ❌ | ❌ | ✅ | ❌ | — |
-| Paperclip | AI builders | ✅ | ✅ | ✅ | ✅ | Heartbeats, cost budgets, board governance |
-| **AgentOS** | **Everyone else** | **✅** | **Planned** | **✅** | **Planned** | **Durable + Heartbeats + Org Chart + Canva-level UX** |
+| Pattern | File | What It Taught Us |
+|---------|------|------------------|
+| Durable core loop | `query.ts`, `QueryEngine.ts` | Labeled while loops with typed exit reasons. State machine design. |
+| Streaming tool execution | `StreamingToolExecutor.ts` | Tools fire during streaming. Partition by concurrency safety. |
+| Permission classifier | `TRANSCRIPT_CLASSIFIER` (107 refs) | Confidence thresholds. Auto-approval vs escalation decision. |
+| Multi-agent fork | `forkSubagent.ts`, `runAgent.ts` | Sidechain transcripts. Fork recursion guard. Parent/worker isolation. |
+| Coordinator mode | `coordinatorMode.ts` | 4-phase workflow. Spawn parallel workers. |
+| Context compaction | `compact.ts`, `autoCompact.ts` | 4-tier compaction strategy. Token budget management. |
+| MCP integration | `services/mcp/` | Full OAuth2+PKCE. 15-min auth cache. STDIO/SSE/HTTP transports. |
+| Heartbeat scheduling | `scheduleRemoteAgents.ts` | Cron-based wake with event-driven override. |
 
-### Strategic Findings
-
-**KAIROS (154 refs):** Always-on daemon mode with dream consolidation confirms the product direction. Claude Code — a company with far more resources — is converging on the same architecture. This validates AgentOS's core thesis and creates a 6-12 month competitive window before Anthropic ships broadly.
-
-**PROACTIVE (37 refs):** Agents that act on best judgment between users rather than waiting for confirmation. This is exactly what Maria wants — she doesn't want to be asked every time, only for important escalations.
-
-**COORDINATOR_MODE (32 refs):** Manager/worker architecture for orchestrating parallel sub-agents. Maps directly to AgentOS's escalation governance and multi-agent delegation.
-
-**TRANSCRIPT_CLASSIFIER (107 refs):** AI-based permission auto-approval. The single biggest friction reducer for non-technical users. A business owner doesn't want to approve every tool call.
-
-### Key Files Reference
-
-| Domain | Primary Files |
-|--------|--------------|
-| Core Loop | `query.ts`, `QueryEngine.ts` |
-| Tools | `Tool.ts`, `tools.ts`, `services/tools/toolExecution.ts` |
-| Streaming | `StreamingToolExecutor.ts`, `toolOrchestration.ts` |
-| Compaction | `compact.ts`, `autoCompact.ts`, `microCompact.ts` |
-| Multi-Agent | `AgentTool.tsx`, `forkSubagent.ts`, `runAgent.ts`, `coordinatorMode.ts` |
-| MCP | `services/mcp/client.ts`, `services/mcp/auth.ts` |
-| Error Handling | `errors.ts`, `withRetry.ts` |
-| Persistence | `sessionStorage.ts`, `toolResultStorage.ts` |
-| Skills | `loadSkillsDir.ts`, `bundled/skillify.ts` |
-| Remote Bridge | `bridge/bridgeMain.ts`, `bridge/replBridge.ts`, `remoteBridgeCore.ts` |
-| Feature Flags | Scattered — `feature('FLAG')` throughout |
+**The critical insight:** These are not features. They are the engineering substrate that makes agents feel reliable, trustworthy, and worth paying for. Maria never reads `forkSubagent.ts`. She experiences an agent that works while she sleeps and never loses context. That experience is built on the patterns above.
 
 ---
 
-*Last updated: 2026-03-31*
+*Last updated: 2026-04-01*
 *Owner: Product*
-*Status: Living document — update with each major release*
+*Status: Active — Source of Truth*
+*Version: 4.0 (replaces v1.2)*
