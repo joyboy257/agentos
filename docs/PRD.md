@@ -29,13 +29,13 @@
 
 ## 1. Vision
 
-**"Hire an AI employee. It works while you sleep. And you can trace everything it does."**
+**"Build your AI team. On a canvas. In plain English."**
 
-AgentOS is a **world-class agent harness** — not a workflow tool, not a task runner, not a pipeline builder — with **Canva-level UX for non-technical business users**.
+AgentOS is an **infinite visual canvas** for composing AI agent teams — with **Canva-level simplicity** and **world-class engineering underneath**.
 
-The comparison is not "Claude Code for business." It's **"Canva for AI agents."**
+The comparison is not "n8n for AI agents." It's not a workflow builder. It's a **team composition tool**: you build teams of AI employees on an infinite canvas, each agent is a node you can prompt into existence, configure manually, or wire together visually.
 
-Every business owner has work that floods in faster than they can handle — leads, inquiries, research, coordination, follow-ups. AgentOS lets anyone hire an AI employee to own any domain of work, prompted into existence through natural language.
+Think: n8n's canvas meets paperclip.ai's spatial AI UI — where every node is a persistent, memory-enabled AI employee that works while you sleep.
 
 ---
 
@@ -72,31 +72,33 @@ The MVP serves Maria. Phase 2 serves James.
 
 ### What AgentOS Actually Is
 
-**A trust infrastructure layer for AI agents — for businesses that cannot afford to operate blind.**
+**An infinite visual canvas for composing AI agent teams — where agents are persistent employees, not pipeline steps.**
 
-Not a configuration screen. Not a workflow canvas. Not a pipeline builder. A **team dashboard** where Maria opens the app, sees her agents working, and — critically — can trace every decision, every tool call, every learned fact, with cryptographic integrity.
+AgentOS has two layers:
+
+**The Canvas (n8n-style):** An infinite 2D canvas where each node is an AI agent. Nodes connect to each other, pass work between them, and report status visually. You compose teams by dragging nodes, wiring connections, and prompting new nodes into existence. This is one team — spatially composed, visually legible.
+
+**The Portfolio (paperclip.ai-style):** Multiple canvases = multiple teams. Each canvas is a domain of work — HVAC operations, marketing research, client intake. You navigate between canvases the way you navigate between projects. Maria's whole business, organized as agent teams.
 
 ### The Threefold Moat
 
-**Moat 1 — Trust Infrastructure:** Auditability, memory integrity, security primitives built in before features. Not bolted on after. Every business needs to answer "what did my agent do?" — AgentOS makes that answerable.
+**Moat 1 — The Canvas UX:** An infinite, programmable canvas that makes AI team composition as intuitive as arranging sticky notes. Composable, visual, spatial. No other product combines this UX with a world-class harness underneath.
 
-**Moat 2 — Domain Depth:** Vertical agents for any business domain (HVAC, legal, real estate, healthcare-adjacent) that require auditable, judgment-capable AI employees. This takes 12-18 months to get right and cannot be cloned by downloading a reference harness and shipping in 90 days.
+**Moat 2 — Trust Infrastructure:** Auditability, memory integrity, security primitives built in before features. Not bolted on after. Every business needs to answer "what did my agent do?" — AgentOS makes that answerable.
 
-**Moat 3 — UX for the Masses:** Canva-level simplicity for an audience Anthropic will never serve. Non-technical business users who need AI employees, not AI tools. The agent creation experience is as easy as describing what you want in plain English.
+**Moat 3 — Domain Depth:** Vertical agent archetypes for regulated industries (HVAC, legal, real estate) that require auditable, judgment-capable AI employees. This takes 12-18 months to get right and cannot be cloned by downloading a reference harness and shipping in 90 days.
 
 ### The Five Pillars
 
-1. **NL-to-Deployment** — Describe what you want in plain English. Watch your agent team get built in real time. No config files. No JSON. No jargon.
+1. **Infinite Canvas** — An n8n-style infinite canvas. Drag agents, wire connections, compose teams visually. Pan, zoom, arrange. The canvas is always there, always showing your teams.
 
-2. **Visual Agent Harness** — A canvas that shows agent teams as an org chart with live status, reasoning traces, and memory state. Maria sees what her agents are doing right now — not a log file.
+2. **NL-to-Node** — Type "add a lead research agent" or "add a node between intake and follow-up" — the canvas responds. Agents can be prompted into existence or configured manually.
 
-3. **Durable Execution** — Agents that survive server restarts, checkpoint their progress, and resume from where they left off. Every state transition is logged. Every tool call is idempotent.
+3. **Persistent Agent Nodes** — Each node is a real AI employee: durable execution, cross-session memory, reasoning traces, and scheduled or event-driven wake cycles. Not a pipeline step — a worker with judgment.
 
-4. **Persistent Memory + Judgment** — Agents that remember what happened last week, learn from Maria's approval patterns, and only escalate what genuinely needs human input. Every learned fact is verifiable.
+4. **Real-Time Reasoning Traces** — Watch any agent think in real time. Every decision is visible, timestamped, and logged. When it escalates, you see exactly why.
 
-5. **Business Data Access** — OAuth connections to Gmail, Calendar, HubSpot. Agents that can actually do the work — with every action logged and traceable.
-
-6. **Auditability** — Every tool call, every LLM decision, every memory extraction, every approval is logged with cryptographic integrity. Maria can answer "what did my agent do last Tuesday?" in under 5 minutes. Exportable for compliance.
+5. **Auditability** — Every tool call, every LLM decision, every learned fact is logged with cryptographic integrity. Full decision history exportable for compliance.
 
 ---
 
@@ -110,13 +112,14 @@ This was wrong. The 6-12 month window is not for **building the harness** — th
 
 ### The New Thinking (v5)
 
-The window is for **becoming the trusted, auditable system that regulated industries and careful business owners will demand.**
+The window is for **becoming the trusted, auditable canvas for AI agent teams** — before n8n adds AI agents, before paperclip.ai adds trust infrastructure, before a well-funded entrant combines the two.
 
-The companies that win are the ones that answer the question cleanly:
+The competitive landscape on the canvas layer:
+- **n8n** has the visual canvas. It has no AI agents, no memory, no trust layer.
+- **paperclip.ai** has spatial AI UI. It is early and experimental.
+- **Neither** combines an infinite canvas with a world-class harness AND a full trust infrastructure underneath.
 
-> *"Can you tell me, precisely, what your system did with my data on a specific day last month? Not what it was configured to do. Not what it was supposed to do. What it actually did — and why?"*
-
-The harness is already figured out. The differentiation is what you build **around it** — audit trails, memory integrity, security primitives, compliance wrappers — that take 12-18 months to accumulate and cannot be fast-followed.
+The window is 12-18 months before one of them closes the gap. The differentiation is: world-class harness (durable execution, checkpointing) + infinite visual canvas (n8n-style) + full trust infrastructure (audit trails, memory integrity, compliance) — all three together.
 
 ### The Cambrian Explosion Is Real
 
@@ -131,32 +134,43 @@ This means:
 
 ## 5. What We Are NOT Building
 
-**Not a workflow tool.** Zapier, Make, n8n are workflow builders. You drag steps, connect triggers, run the pipeline. Every run starts fresh. Nothing persists. Nothing learns. No audit trail.
+**Not a traditional workflow tool.** Zapier, Make, n8n run pipelines: each step executes once per trigger, nothing persists between runs, nothing learns. AgentOS runs teams: agents are persistent workers with memory, judgment, and scheduled behavior. The canvas shows a team, not a pipeline.
 
-**Not a chat interface.** ChatGPT, Claude.ai are conversation tools. You type, it responds, done. The context is the conversation. There's no persistent worker.
+**Not a chat interface.** ChatGPT, Claude.ai are conversation tools. You type, it responds, done. There's no persistent worker, no canvas, no team. AgentOS is not conversational — it's organizational.
 
-**Not a developer tool.** Claude Code, Copilot, Devin are for engineers. They assume technical literacy. AgentOS assumes none.
+**Not a developer tool.** Claude Code, Copilot, Devin are for engineers. They assume technical literacy. AgentOS assumes none. You compose teams visually or by typing plain English — not by writing code or configuring JSON.
 
-**Not "an email agent."** An agent archetype is a template. The product is the harness + trust infrastructure. Any domain of work — leads, research, follow-ups, scheduling, intake — is a template. The harness is the moat.
+**Not a single-agent product.** One agent is a demo. The product is teams of agents, composed on a canvas, working in parallel, passing results between nodes, reporting to Maria as a unit.
 
-**Not "build the harness fast and add trust later."** Trust primitives — audit logging, memory integrity, security isolation — must be built into the foundation. Retrofitting them onto an existing harness is a security nightmare and a compliance liability.
+**Not "build the harness fast and add trust later."** Trust primitives — audit logging, memory integrity, security isolation — must be built into the foundation from day one.
 
 ---
 
 ## 6. Core Product Concept
 
-### The Hiring Metaphor
+### The Team Composition Metaphor
 
-You don't run an agent. You **hire** one.
+You don't configure a workflow. You **compose a team**.
 
-| Traditional Automation | AgentOS |
-|----------------------|---------|
-| You configure a workflow | You describe a worker |
-| The workflow runs when triggered | The agent works on a schedule + proactively |
-| Every run starts fresh | The agent remembers previous sessions |
-| You check the output | The agent notifies you when it needs you |
-| The workflow is a tool | The agent is an employee |
-| What it did is a mystery | What it did is fully traceable |
+| Workflow Builder | AgentOS |
+|---|---|
+| You drag steps and connect triggers | You drag nodes and wire them together |
+| Every run starts fresh | Agents remember previous sessions |
+| You check the output | Agents notify you when they need input |
+| A pipeline is a tool | A team is an organizational unit |
+| What ran is a log | What happened is fully traceable |
+
+### The Canvas Interaction Model
+
+Maria builds her team in three ways, in any combination:
+
+| Mode | What Maria Does |
+|---|---|
+| **Visual** | Drag a new agent node onto the canvas. Wire it to other nodes. Configure it by clicking. |
+| **Prompt** | Type "add a lead research node between intake and follow-up" — the canvas updates. |
+| **Hybrid** | Drag a pre-built archetype onto the canvas, then prompt to customize: "make this one flag anything over $8K." |
+
+Most users start with a pre-built archetype and customize it with one or two prompts. Power users compose complex teams visually.
 
 ### The Abstraction Ladder
 
@@ -164,24 +178,26 @@ Maria operates at the layer she's comfortable with. She can go deeper if she wan
 
 | Layer | What Maria Says | What It Means |
 |------|---------------|---------------|
-| **1 — Pure intent** | "Handle my inbound leads" | Agent infers everything: schedule, tools, escalation |
-| **2 — Agent config** | "Check my CRM every hour, flag anything over $10K" | She controls schedule + escalation, not tools |
-| **3 — Tool access** | "Give it Gmail and HubSpot access but NOT Salesforce" | She controls what the agent can touch |
-| **4 — Per-action** | "Always ask me before it drafts for a new company" | She approves every individual action |
+| **1 — Archetype** | Drag "Lead Research Agent" onto the canvas | Agent infers everything: schedule, tools, escalation |
+| **2 — Prompt** | "Make it flag anything over $10K" | She controls escalation rules by prompting |
+| **3 — Configure** | Click the node, set schedule, set budget | She controls schedule + budget directly |
+| **4 — Wire** | Drag a connection between two nodes | She composes multi-node teams visually |
 
-Most users start at Layer 1. The system surfaces Layer 2 naturally ("When should it run?"). Deeper layers are available but not required.
+Most users start at Layer 1. The system surfaces Layer 2 naturally ("anything else?"). Deeper layers are available but not required.
 
 ### The AHA Moment
 
 Not a single dramatic reveal. Trust is earned incrementally.
 
-Maria hires an agent Monday. Tuesday she wakes up to a notification: **"Lead Research Agent handled 14 leads while you slept. 2 escalated."** She didn't have to check. The agent just worked.
+**Monday:** Maria opens the canvas. It's empty. She drags a "Lead Research Agent" archetype onto the canvas. The system shows her a preview node with what it inferred: schedule, tools, escalation rules. She clicks "Hire." The agent appears on the canvas.
 
-She taps the escalation. She sees: *"Agent wanted to draft a follow-up for Acme Corp — $50K potential deal. I didn't auto-approve because this is a new company. Here's the full reasoning."* She approves in 10 seconds.
+**Tuesday:** She wakes up to a notification: **"Lead Research Agent handled 14 leads while you slept. 2 escalated."** She didn't have to check. The agent just worked.
 
-After two weeks: Maria realizes she almost started her morning by researching a lead before remembering the agent already did it. She checks the activity log to confirm — and she can trace every decision the agent made, every lead it contacted, every draft it created.
+She taps the escalation. She sees the reasoning trace: *"Agent wanted to draft a follow-up for Acme Corp — $50K potential deal. I didn't auto-approve because this is a new company. Here's the full reasoning."* She approves in 10 seconds.
 
-After a month: Maria goes on vacation. Her agent handles everything. She gets back to a summary: **"Agent worked 12 days. Processed 47 leads. Drafted 31 follow-ups. 4 escalated. All traceable."** Her accountant asks what the AI did. She exports a compliance report in 2 minutes.
+**Two weeks in:** Maria realizes she almost started her morning by researching a lead before remembering the agent already did it. She opens the canvas — her team is there, status visible, reasoning traces available. She can trace every decision the agent made.
+
+**A month in:** Maria has a team of 3 agents on the canvas. She goes on vacation. Her agents handle everything. She gets back to a summary: **"3 agents worked 12 days. Processed 47 leads. Drafted 31 follow-ups. 4 escalated. All traceable."** Her accountant asks what the AI did. She exports a compliance report in 2 minutes.
 
 ---
 
@@ -191,52 +207,57 @@ After a month: Maria goes on vacation. Her agent handles everything. She gets ba
 
 The MVP is not a template or a feature. It is proof of the thesis:
 
-> **A non-technical business user can hire a persistent, memory-enabled AI employee in under 5 minutes, trust it to work, and trace everything it did.**
+> **A non-technical business user can compose an AI team on a visual canvas, put them to work in under 5 minutes, trust them to operate, and trace everything they did.**
 
 ### MVP Feature Set
 
 **What ships in the MVP:**
 
-1. **Visual Canvas** — Maria opens the app, sees her agent team as an org chart. Cards show role, status (idle/running/waiting), and what the agent is doing right now.
+1. **Infinite Canvas** — Maria opens the app to an empty canvas with a prompt bar: "What do you want your team to do?" She can also drag pre-built archetypes onto the canvas. Pan, zoom, arrange nodes. The canvas is always there.
 
-2. **NL-to-Agent Deployment** — Maria types "I want an agent that handles my inbound leads and drafts follow-up emails." The system shows her a preview of what that agent would do — its schedule, its tools, its escalation rules. She clicks "Activate." The agent is live. She can also pick from pre-built agent archetypes.
+2. **Agent Archetypes** — Three drag-and-drop archetypes: Lead Research, Customer Follow-Up, Research Monitor. Drag one onto the canvas — the system infers its configuration and shows a preview node.
 
-3. **Tool Integrations** — Agent connects to business data via OAuth integrations (Gmail, Calendar, HubSpot, Slack). Agent can read, draft, and act on real business data. Real work, not demos.
+3. **NL-to-Node** — Type into the canvas prompt: "add a lead research node between intake and follow-up" — the canvas updates. Type: "make it flag anything over $8K" — the node updates. Natural language controls the canvas.
 
-4. **Durable Execution** — The agent is a persistent process, not a request-response. It checkpoints after every action. Server restarts don't kill in-flight work. Every state transition is logged.
+4. **Visual Node Composition** — Drag nodes to reposition. Wire nodes together by dragging a connection between them. Click a node to configure schedule, budget, escalation rules directly. Visual, spatial, direct manipulation.
 
-5. **Real-Time Reasoning Traces** — Maria watches her agent think. Not a spinner. Not a "working..." message. The agent's actual reasoning, streamed live: "Processing lead from Acme Corp... Checking company size... $50K potential deal... Drafting follow-up... Escalating because new company..."
+5. **Tool Integrations** — Each node connects to business data via OAuth integrations (Gmail, Calendar, HubSpot, Slack). Agents can read, draft, and act on real business data. Real work, not demos.
 
-6. **Escalation Modal** — When the agent needs human input, Maria gets a notification. She opens the modal, sees what happened and what the agent wants to do, and decides: Approve / Edit / Skip / Cancel.
+6. **Durable Execution** — Each agent node is a persistent process. It checkpoints after every action. Server restarts don't kill in-flight work. Every state transition is logged.
 
-7. **Agent Card** — Status dot, last run time, next wake time, budget bar. Maria always knows the state of her team.
+7. **Real-Time Reasoning Traces** — Click any running node. Maria watches her agent think — streamed live: "Processing Acme Corp... Checking deal size... $50K... Drafting follow-up... Escalating because new company..."
 
-8. **Activity Log** — Every agent action is logged. Searchable. Filterable. **Exportable.** 90-day retention.
+8. **Escalation Modal** — When any node needs human input, Maria gets a push notification. She opens the modal, sees the reasoning, and decides: Approve / Edit / Skip / Cancel.
 
-9. **Magic Link Auth** — Maria signs in with email. No passwords.
+9. **Node Status at a Glance** — Each node shows a status dot: green (idle), pulsing green (working), amber (waiting for approval), gray (paused). Maria sees her whole team status without opening anything.
 
-10. **Push Notifications** — Escalations reach Maria immediately. Not in-app polling. Real push.
+10. **Activity Log** — Every agent action across all nodes is logged. Searchable. Filterable. **Exportable.** 90-day retention.
 
-11. **Immutable Audit Trail** — Every tool call is logged with: timestamp, actor, input hash, output hash, LLM reasoning text. Maria can query her full audit history. Logs are tamper-evident (append-only, no UPDATE/DELETE on step records).
+11. **Magic Link Auth** — Maria signs in with email. No passwords.
+
+12. **Push Notifications** — Escalations reach Maria immediately. Not in-app polling. Real push.
+
+13. **Immutable Audit Trail** — Every tool call is logged with: timestamp, actor, input hash, output hash, LLM reasoning text. Maria can query her full audit history. Logs are tamper-evident (append-only).
 
 ### What Is NOT in the MVP
 
-- **Multi-agent orchestration** — Phase 3
-- **Template gallery with 8 templates** — MVP has 3 pre-built agent archetypes (Lead Research, Customer Follow-Up, Research Monitor). Sufficient to prove thesis.
-- **Long-term memory** — Working memory ships in MVP. Cross-session memory ships at Phase 2.
-- **Additional tool integrations** — Gmail, Calendar, HubSpot, Slack — enough integrations to prove the domain model works.
+- **Advanced multi-node orchestration** — MVP supports wiring 2-3 nodes together. Complex fork/join patterns, parallel fan-out, and cross-node state coordination are Phase 2+.
+- **Template gallery** — MVP has 3 pre-built archetypes. Full gallery with 8+ templates ships at Phase 2.
+- **Long-term memory** — Working memory ships in MVP. Cross-session memory (mem0 + Qdrant) ships at Phase 2.
+- **Additional tool integrations** — Gmail, Calendar, HubSpot, Slack. Enough to prove the model.
 - **Skills directory** — Phase 2
+- **Multi-canvas portfolio** — MVP is one canvas. Phase 2 adds the paperclip-style portfolio view for multiple teams.
 - **Governance board** — Phase 2
 - **Auto-pause on budget** — Phase 2
 - **PROACTIVE always-on mode** — Phase 2 (MVP uses scheduled heartbeats)
 - **Permission auto-approval** — Phase 2 (MVP requires approval for every non-trivial action)
 - **Memory integrity verification** — Phase 2
 
-### The MVP Is Not a Single-Domain Tool
+### The MVP Proves the Canvas Thesis
 
-The MVP ships three agent archetypes to prove the domain model: Lead Research, Customer Follow-Up, and Research Monitor. These are proof points, not the product.
+The MVP has one canvas, three archetypes, and basic node wiring. This is sufficient to prove: a non-technical user can compose a team on a visual canvas and put them to work.
 
-The product is the harness + trust infrastructure. Any domain of work can be delegated to an AgentOS agent. The MVP proves this for three domains. The template gallery, multi-agent, and skills system are surface on top.
+The full product is a portfolio of canvases, each representing a domain of work. Phase 2 delivers that.
 
 ---
 
@@ -396,7 +417,118 @@ We use it as our engineering reference. We do not clone it. We adapt its princip
 | **Multi-agent fork** | Coordinator spawns parallel workers. Each has isolated transcript. Sidechain transcripts for audit. | Phase 3. |
 | **Idempotency keys** | Every tool call has a ULID-based idempotency key. Replayed calls return cached result, don't re-execute. | Phase 1. |
 
-### The 5P Agent Architecture
+### The Coordinator Pattern
+
+Each canvas has one **coordinator** — an implicit orchestrator that manages the team. Maria never sees the coordinator as a node. It runs in the background, watching narrow agents, distributing sub-tasks, and routing escalations.
+
+**The product metaphor:** The coordinator is the foreman on a work floor. It doesn't do the specialized work — it watches the specialists, assigns tasks, collects results, and knows when to bring in the boss (Maria) for decisions.
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        COORDINATOR (implicit)                        │
+│  - Manages team goal decomposition                                   │
+│  - Distributes sub-tasks to narrow agents                           │
+│  - Monitors agent reasoning traces via SSE                          │
+│  - Routes escalations to Maria                                      │
+│  - Aggregates final output                                          │
+│  - Context is management-only: does NOT do work                     │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+   │  Node A     │     │  Node B     │     │  Node C     │
+   │ (Lead Res.) │     │ (Follow-Up) │     │ (Monitor)  │
+   │  Sandbox    │     │  Sandbox    │     │  Sandbox   │
+   │  Context:   │     │  Context:   │     │  Context:  │
+   │  isolated   │     │  isolated   │     │  isolated  │
+   │  Tools:     │     │  Tools:     │     │  Tools:    │
+   │  HubSpot    │     │  Gmail      │     │  Web scrap │
+   └─────────────┘     └─────────────┘     └─────────────┘
+          │                   │                   │
+          └───────────────────┴───────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │  Wire carries:  │
+                    │  Output artifact │
+                    │  (email draft,  │
+                    │   lead profile) │
+                    │  NOT context    │
+                    └─────────────────┘
+```
+
+**Key properties:**
+
+| Property | Rule |
+|---|---|
+| Context isolation | Each node has its own LLM context. Coordinator watches via SSE, doesn't share context. |
+| Wire scope | Wires carry output artifacts (drafts, profiles, summaries), not raw context tokens. |
+| Escalation path | Any node → coordinator → Maria. Not node-to-node escalation. |
+| Coordinator continuity | One coordinator per canvas. Survives node restarts. Persists across canvas sessions. |
+| Node add/remove | Nodes can be added or removed without restarting the coordinator. Wires are hot-swapped. |
+
+#### How Wiring Works
+
+A wire between Node A and Node B means: "when Node A completes, pass its output to Node B as input."
+
+The coordinator manages the handoff:
+1. Node A completes — produces an output artifact (e.g., a drafted email)
+2. Coordinator receives the artifact — not Node B directly
+3. Coordinator validates the artifact against Node B's expected input schema
+4. If valid, coordinator invokes Node B with the artifact as input
+5. If invalid, coordinator flags a wiring error (Maria sees: "Node B couldn't accept Node A's output — check the wire")
+
+This keeps nodes decoupled. Node A doesn't need to know about Node B. The coordinator is the only thing that knows the full wire graph.
+
+#### Escalation Flow
+
+```
+Node A detects escalation condition
+  → Pauses its reasoning
+  → Emits escalation event to coordinator via SSE
+  → Coordinator receives: { node_id, reason, proposed_action, reasoning_trace }
+  → Coordinator pauses Node A's wire outputs (downstream nodes don't receive stale input)
+  → Coordinator routes escalation to Maria (push notification + inbox)
+  → Maria resolves: Approve / Edit / Skip / Cancel
+  → Coordinator applies Maria's decision to Node A
+  → Coordinator resumes Node A or terminates based on decision
+```
+
+**The coordinator's escalation context** includes:
+- Which node escalated
+- The full reasoning trace at the moment of escalation
+- The proposed action and its confidence
+- What downstream nodes would have received (so Maria understands blast radius)
+
+#### Coordinator vs. Node Responsibilities
+
+| | Coordinator | Node (Narrow Agent) |
+|---|---|---|
+| **Role** | Foreman | Specialist |
+| **Context** | Management: watches traces, knows team state | Work: executes tasks |
+| **Memory** | Team-level: knows which nodes exist, wire graph | Task-level: knows its own job |
+| **LLM calls** | Decides task distribution, routes escalations | Executes tools, drafts outputs |
+| **Visible to Maria?** | Never (implicit) | Always (node on canvas) |
+| **Restart survival** | Always — coordinator is the canvas process | Each node checkpoints independently |
+
+#### Multi-Node Coordination (Phase 2+)
+
+Phase 1 MVP supports 2-3 nodes wired in a simple chain (A → B → C). Phase 2 adds:
+
+- **Parallel fan-out:** Coordinator spawns Node A, which produces outputs for both Node B and Node C simultaneously (A → B and A → C)
+- **Fork/join:** Coordinator spawns parallel workers, waits for all to complete, aggregates results before proceeding
+- **Cross-node state:** Nodes can write to a shared artifact store (not context). Coordinator enforces access. This enables "Node B reads what Node A wrote."
+
+#### n8n / Slack / Paperclip Reference Points
+
+| Pattern | Reference |
+|---|---|
+| Canvas (nodes + wires) | n8n — infinite canvas, drag nodes, wire connections |
+| Team communication | Slack — activity feed, push notifications, escalations arrive like messages |
+| Coordinator + approval | Paperclip — foreman model, human-in-the-loop governance |
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -449,86 +581,145 @@ We use it as our engineering reference. We do not clone it. We adapt its princip
 
 ## 10. UX Specifications
 
-### The Canvas
+### The Infinite Canvas (n8n-style)
 
-The canvas is a **team dashboard**, not a flowchart.
+The canvas is an **infinite, zoomable 2D workspace** — not a dashboard, not a flowchart. Maria's team lives here.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  AgentOS          Your Team                        [Activity] [⚙]  │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│     ┌──────────┐                                                     │
-│     │ Maria    │                                                     │
-│     │ (you)   │                                                     │
-│     └────┬─────┘                                                     │
-│          │                                                           │
-│    ┌─────┴──────┬──────────────────┐                                │
-│    ▼            ▼                  ▼                                │
-│ ┌──────┐  ┌──────────┐  ┌─────────────┐                          │
-│ │Email  │  │Research  │  │ Marketing   │                          │
-│ │Handler│  │Agent     │  │Agent        │                          │
-│ │✓ idle │  │◐ running │  │💤 dreaming  │                          │
-│ │9am ✓ │  │research: │  │memory proc │                          │
-│ └──────┘  │Apple/MSFT │  └─────────────┘                          │
-│            └──────────┘                                             │
-│                                                                       │
-│  ──────────────────────────────────────────────────────────────     │
-│  [Type to hire: "I want an agent that..."]                          │
-│                                                                       │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  AgentOS              My Canvas                    [Activity] [Canvas ▾] [⚙]        │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  ← Zoom: [−] [100%] [+]    [Fit to view]                    [🔍 Search nodes]     │
+│                                                                                      │
+│                                                                                      │
+│        ┌──────────────────┐           ┌──────────────────┐                        │
+│        │ 🔵 Lead Research │──────────▶│ 🔵 Follow-Up    │                        │
+│        │ 🟢 idle          │           │ 🟢 idle          │                        │
+│        │ 14 leads today   │           │ 31 drafts       │                        │
+│        └──────────────────┘           └──────────────────┘                        │
+│                                                                                      │
+│                                                                                      │
+│                                      ┌──────────────────┐                           │
+│                                      │ 🔵 Research      │                           │
+│                                      │ 🟠 waiting       │                           │
+│                                      │ Acme Corp (1)    │                           │
+│                                      └──────────────────┘                           │
+│                                                                                      │
+│                                                                                      │
+│  ─────────────────────────────────────────────────────────────────────────────     │
+│  [Prompt: "add a lead routing node" or drag from Archetypes]                       │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Key UX principles:**
 
-- Maria never sees a node graph, edge, pipeline, or flowchart
-- Agents appear as employee cards in an org chart
-- Live status is visible at a glance — green (idle), pulsing green (working), amber (waiting for approval), gray (paused)
-- The "Type to hire" bar is always visible, always inviting
+- The canvas is infinite — pan in any direction, zoom in/out
+- Nodes are spatially composed — Maria arranges her team visually, like sticky notes on a whiteboard
+- Connections between nodes show data flow — wires, not arrows
+- Status is visible at a glance — each node has a color-coded status dot
+- The prompt bar is always visible at the bottom — always inviting
 
-### The Agent Card
+### The Archetype Sidebar
+
+Maria drags archetypes from a sidebar onto the canvas:
 
 ```
-┌─────────────────────────────┐
-│ 🟢 Lead Research Agent [⋯]  │
-│ "Researches inbound leads   │
-│  and drafts follow-ups"     │
-│ ──────────────────────────── │
-│ ✓ Idle                      │
-│ Last: Today 9:01am — 14 leads│
-│ Next: Tomorrow 9:00am        │
-│ ──────────────────────────── │
-│ [████████░░] 80% budget      │
-│ 47 leads this week           │
-│ 3 traceable escalations     │
-└─────────────────────────────┘
+┌────────────────────────────────────┐
+│  Agent Archetypes                  │
+├────────────────────────────────────┤
+│  ┌──────────────────────────────┐  │
+│  │ 🔵 Lead Research Agent       │  │
+│  │ "Research leads, flag big    │  │
+│  │  deals, draft follow-ups"   │  │
+│  └──────────────────────────────┘  │
+│                                    │
+│  ┌──────────────────────────────┐  │
+│  │ 🔵 Customer Follow-Up Agent  │  │
+│  │ "Draft follow-ups for        │  │
+│  │  closed-won deals"          │  │
+│  └──────────────────────────────┘  │
+│                                    │
+│  ┌──────────────────────────────┐  │
+│  │ 🔵 Research Monitor          │  │
+│  │ "Monitor competitors, alert  │  │
+│  │  on relevant news"           │  │
+│  └──────────────────────────────┘  │
+│                                    │
+│  [─────── drag onto canvas ─────]  │
+└────────────────────────────────────┘
 ```
 
-### The Reasoning Trace Panel
+Dragging an archetype onto the canvas creates a new node, already configured with inferred schedule, tools, and escalation rules. Maria can adjust by clicking the node or prompting.
 
-When Maria clicks on a running agent, a panel slides in from the right showing the agent's live reasoning:
+### The Node
+
+Each node on the canvas is a persistent AI employee. Click to open the node detail:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Lead Research — Working                    [−] [×]  │
+│  Lead Research Agent                          [⋯] │
 ├─────────────────────────────────────────────────────┤
-│ 9:01:03  → Checking CRM for new leads...           │
-│ 9:01:04  → Found 14 new leads                      │
-│ 9:01:05  → 3 are existing customers (skipping)     │
-│ 9:01:06  → 8 are new inquiries                     │
-│ 9:01:07  → 2 mention large contract — flagging    │
-│ 9:01:08  → Acme Corp: $50K potential — escalate   │
-│ 9:01:09  → Drafting follow-up for Smith inquiry... │
-│ 9:01:12  → Draft complete. Auto-approved.          │
-│            Escalating Acme Corp lead.               │
-│            Confidence: 0.31 (threshold: 0.85)      │
-│ 9:01:13  → ⚠️ ESCALATE — waiting for Maria        │
+│                                                       │
+│  Status: 🟢 Idle                                     │
+│  Schedule: Daily 9am UTC                             │
+│  Tools: HubSpot (read), Gmail (send)               │
+│  Escalation: Flag deals over $10K                   │
+│  Budget: 80% used this cycle                        │
+│                                                       │
+│  ─────────────────────────────────────────           │
+│  Last run: Today 9:01am — 14 leads processed       │
+│  Next run: Tomorrow 9:00am                          │
+│                                                       │
+│  Reasoning trace (last run):                        │
+│  ┌─────────────────────────────────────────────┐     │
+│  │ 9:01:03 → Checking HubSpot for new leads  │     │
+│  │ 9:01:04 → Found 14 new leads              │     │
+│  │ 9:01:07 → 2 mention large contracts       │     │
+│  │ 9:01:08 → Acme Corp: $50K — escalate      │     │
+│  │ 9:01:12 → Drafting follow-ups...          │     │
+│  │ 9:01:14 → 2 escalated. 12 auto-approved.  │     │
+│  └─────────────────────────────────────────────┘     │
+│                                                       │
+│  [View full reasoning] [Edit node] [Pause]           │
 └─────────────────────────────────────────────────────┘
 ```
 
-This is the world-class harness UX. Maria watches her agent think in real time. She understands what it's doing without reading docs. She trusts it because she can see the reasoning.
+### Wiring Nodes Together
+
+Maria wires two nodes by dragging from one node's output handle to another node's input handle:
+
+```
+  Node A (Lead Research)          Node B (Follow-Up)
+  ┌──────────────────┐           ┌──────────────────┐
+  │ Lead Research    │           │ Follow-Up        │
+  │          [out] ──┼──────────▶│ [in]             │
+  └──────────────────┘           └──────────────────┘
+                                        │
+                                        ▼
+                                  ┌──────────────────┐
+                                  │ Maria (approval) │
+                                  │ [escalation]     │
+                                  └──────────────────┘
+```
+
+The wire carries the output of Node A into Node B. When Lead Research escalates, the escalation goes to Maria — not into the wire.
+
+### The Prompt Bar
+
+The prompt bar at the bottom of the canvas responds to natural language:
+
+| Maria types | Canvas does |
+|---|---|
+| "add a lead research node" | Creates a new Lead Research node at the center of the viewport |
+| "make it flag anything over $8K" | Updates the selected node's escalation rule |
+| "add a routing node between lead research and follow-up" | Inserts a new routing node in the wire between those nodes |
+| "show me what happened yesterday" | Opens the activity log filtered to the last 24 hours |
 
 ### The Escalation Modal
+
+When any node escalates, Maria gets a push notification. Tapping it opens the escalation modal:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -556,6 +747,25 @@ This is the world-class harness UX. Maria watches her agent think in real time. 
 └─────────────────────────────────────────────────────┘
 ```
 
+### The Portfolio (paperclip.ai-style) — Phase 2
+
+Phase 2 adds a portfolio view above the canvas:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  AgentOS              [My Canvas ▾]                    [Activity] [⚙]            │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│   ○ HVAC Operations         ← currently viewing                                      │
+│   ○ Marketing Research                                                           │
+│   ○ Legal Intake                                                              │
+│   ○ + New Canvas                                                              │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Each circle is a canvas. Maria switches between canvases to manage different teams. This is the paperclip.ai layer — spatial, flat, navigable.
+
 ---
 
 ## 11. Technical Architecture
@@ -569,8 +779,8 @@ This is the world-class harness UX. Maria watches her agent think in real time. 
 │  ┌────────────┐  ┌──────────────┐  ┌───────────────────────────┐  │
 │  │  Canvas    │  │  NL Layer    │  │  Event Stream (SSE)       │  │
 │  │  (React)   │  │  (GPT-4o)   │  │  real-time reasoning      │  │
-│  │  org chart │  │  intent →    │  │  traces + status updates  │  │
-│  │  + cards   │  │  agent config│  │                           │  │
+│  │  infinite  │  │  intent →    │  │  traces + status updates  │  │
+│  │  workspace │  │  node config │  │                           │  │
 │  └─────┬──────┘  └──────┬───────┘  └────────────────────────────  │  │
 │        │                │                                            │
 │        │ SSE            ▼                                            │
@@ -657,26 +867,27 @@ The classifier **outputs its reasoning**, not just a confidence score. Maria alw
 
 ### Phase 1 — MVP (Days 0–90): Prove the Thesis
 
-**Goal:** A non-technical user can hire a persistent, durable AI employee in under 5 minutes, trust it to work, and trace everything it did.
+**Goal:** A non-technical user can compose an AI team on a visual canvas, put them to work in under 5 minutes, trust them to operate, and trace everything they did.
 
 **Feature Delivery:**
 
 | Feature | Description |
 |---------|-------------|
-| Canvas team dashboard | Org chart view with agent cards, live status dots |
-| NL-to-agent deployment | Type goal → preview agent → activate |
-| Gmail OAuth integration | Read + compose + send |
+| Infinite canvas | n8n-style zoomable 2D workspace; pan, zoom, drag nodes |
+| Agent archetypes | 3 drag-and-drop archetypes: Lead Research, Customer Follow-Up, Research Monitor |
+| NL-to-node | Canvas prompt bar responds to natural language; add, customize, wire nodes |
+| Visual node wiring | Drag between node handles to wire connections; data flows along wires |
 | Durable execution | BullMQ + Postgres checkpoints; server restart survival |
-| Real-time reasoning traces | Streaming tool execution; Maria watches agent think |
-| Escalation modal | Approve / Edit / Send / Skip / Cancel |
-| Agent card | Status, last run, next wake, budget bar |
-| Activity log | Ticket-based, searchable, **exportable**, 90-day retention |
+| Real-time reasoning traces | Streaming tool execution per node; Maria watches any node think live |
+| Escalation modal | Approve / Edit / Skip / Cancel |
+| Node status at a glance | Color-coded status dot per node; whole-team status visible on canvas |
+| Activity log | Every action across all nodes; searchable, filterable, **exportable**, 90-day retention |
 | Immutable audit trail | Append-only step log; SHA-256 hashes; no UPDATE/DELETE |
 | Magic link auth | Password-free email auth |
 | Push notifications | Escalations reach Maria immediately |
-| Approved contact list | Agent can only email recipients on Maria's approved list |
+| Tool integrations | Gmail, Calendar, HubSpot, Slack OAuth |
 
-**Success condition:** Maria hires her first agent on Day 2. On Day 3, she wakes up to "Lead Research Agent processed 14 leads while you slept." She can trace every lead the agent touched — which ones, what it did, why — in under 2 minutes.
+**Success condition:** Maria opens the app, sees an empty canvas, drags a Lead Research Agent onto it, and has a working team node running in under 5 minutes. On Day 2, she wakes up to "Lead Research Agent processed 14 leads while you slept." She can trace every lead — which ones, what it did, why — in under 2 minutes.
 
 **What we are NOT shipping:** Template gallery (beyond 3 agent archetypes), multi-agent, long-term memory, PROACTIVE, Calendar, HubSpot, governance board, auto-pause, skills directory, permission auto-approval, memory integrity verification.
 
@@ -690,7 +901,8 @@ The classifier **outputs its reasoning**, not just a confidence score. Maria alw
 
 | Feature | Description | Competitive Moat |
 |---------|-------------|------------------|
-| **Permission auto-approval** | TRANSCRIPT_CLASSIFIER-inspired AI classifier. Routine actions auto-execute. Only unusual ones escalate. **Outputs reasoning** for every decision. | Anthropic's classifier trains on code. Ours trains on business workflow patterns. Domain-specific. |
+| **Multi-canvas portfolio** | paperclip.ai-style flat spatial view of all canvases. Each canvas = one team = one domain of work. Navigate between canvases. | The organizational layer above the canvas. Competitors have single-canvas products. |
+| **Permission auto-approval** | AI classifier. Routine actions auto-execute. Only unusual ones escalate. **Outputs reasoning** for every decision. | Anthropic's classifier trains on code. Ours trains on business workflow patterns. Domain-specific. |
 | **Long-term memory** | mem0.ai + Qdrant. Agent remembers Maria's preferences across sessions. | Always-on learning. Competitors start fresh every session. |
 | **Memory integrity** | Every extracted fact is confirmed or denied by Maria. Hallucinations are flagged and corrected. | Hallucination guard creates a trust feedback loop that improves over time. |
 | **PROACTIVE mode** | Event-driven webhook → agent wakes immediately when new work arrives, not on next heartbeat. | 2-minute latency from new lead/inquiry to agent action. Not next-day. |
@@ -834,7 +1046,7 @@ The PRD defines *what* we are building. These documents define *how*.
 | **Plan: Phase 1 Execution** | Full Phase 1 build plan. Maps MVP features to implementation units. | PRD v5, Harness Architecture Reference |
 | **Plan: Durable Execution** | BullMQ + Postgres checkpoint/resume. Heartbeat scheduler. Immutable step log. | PRD v5, Harness Architecture Reference |
 | **Plan: NL-to-Agent Deployment** | GPT-4o → agent config. Prompt design. Fallback behavior. Error handling. | PRD v5 |
-| **Plan: Canvas UI** | React component specs for org chart, agent cards, reasoning trace panel. | PRD v5, Design System |
+| **Plan: Canvas UI** | React component specs for infinite canvas, node rendering, wiring, sidebar, and reasoning trace panel. | PRD v5, Design System |
 | **Plan: Gmail Integration** | OAuth flow, token storage, read/compose/send tools, rate limiting. Approved contact list enforcement. | PRD v5, Harness Architecture Reference |
 | **Plan: Audit Trail API** | Immutable step log schema, SHA-256 hashing, append-only enforcement, export endpoints. | PRD v5, Harness Architecture Reference |
 
