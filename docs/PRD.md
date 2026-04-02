@@ -419,27 +419,27 @@ We use it as our engineering reference. We do not clone it. We adapt its princip
 
 ### The Coordinator Pattern
 
-Each canvas has one **coordinator** — an implicit orchestrator that manages the team. Maria never sees the coordinator as a node. It runs in the background, watching narrow agents, distributing sub-tasks, and routing escalations.
+Each canvas has one **Team Lead** — a full LLM agent visible on the canvas, managing the team. The Team Lead is not infrastructure — it is an agent with its own context, its own reasoning, its own tools. It is the Paperclip CEO, adapted for AgentOS.
 
-**The product metaphor:** The coordinator is the foreman on a work floor. It doesn't do the specialized work — it watches the specialists, assigns tasks, collects results, and knows when to bring in the boss (Maria) for decisions.
+**The product metaphor:** The Team Lead is the foreman on a work floor. It doesn't do the specialized work — it watches the specialists, assigns tasks, collects results, and knows when to bring in the boss (Maria) for decisions. It is a real AI employee, not a message broker.
 
 #### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        COORDINATOR (implicit)                        │
-│  - Manages team goal decomposition                                   │
-│  - Distributes sub-tasks to narrow agents                           │
-│  - Monitors agent reasoning traces via SSE                          │
-│  - Routes escalations to Maria                                      │
-│  - Aggregates final output                                          │
-│  - Context is management-only: does NOT do work                     │
+│                      TEAM LEAD (visible node)                          │
+│  - Full LLM agent with own context and tools                        │
+│  - Reasons about task decomposition                                   │
+│  - Assigns sub-tasks to workers                                      │
+│  - Monitors reasoning traces via SSE                                  │
+│  - Routes escalations to Maria                                       │
+│  - Aggregates final output                                           │
 └─────────────────────────────────────────────────────────────────────┘
                               │
           ┌───────────────────┼───────────────────┐
           ▼                   ▼                   ▼
    ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-   │  Node A     │     │  Node B     │     │  Node C     │
+   │  Worker A   │     │  Worker B   │     │  Worker C   │
    │ (Lead Res.) │     │ (Follow-Up) │     │ (Monitor)  │
    │  Sandbox    │     │  Sandbox    │     │  Sandbox   │
    │  Context:   │     │  Context:   │     │  Context:  │
@@ -464,71 +464,82 @@ Each canvas has one **coordinator** — an implicit orchestrator that manages th
 
 | Property | Rule |
 |---|---|
-| Context isolation | Each node has its own LLM context. Coordinator watches via SSE, doesn't share context. |
+| Team Lead is a full LLM agent | Has its own context window, system prompt, tool calls, token budget |
+| Worker nodes are sandboxed | Each worker has isolated context. Team Lead watches via SSE, doesn't share context with workers. |
 | Wire scope | Wires carry output artifacts (drafts, profiles, summaries), not raw context tokens. |
-| Escalation path | Any node → coordinator → Maria. Not node-to-node escalation. |
-| Coordinator continuity | One coordinator per canvas. Survives node restarts. Persists across canvas sessions. |
-| Node add/remove | Nodes can be added or removed without restarting the coordinator. Wires are hot-swapped. |
+| Escalation path | Worker → Team Lead → Maria. The Team Lead triages and routes. |
+| Coordinator continuity | One Team Lead per canvas. Survives worker restarts. Persists across canvas sessions. |
+| No worker cap | Workers can be added or removed without restarting the Team Lead. Wires are hot-swapped. |
+
+#### The Team Lead Node
+
+The Team Lead appears as a distinct node type on the canvas — visually distinct from worker nodes (different border color, different icon, distinct tooling badge).
+
+Maria can:
+- Prompt the Team Lead directly: "reprioritize the team's work today"
+- Click it to see its reasoning trace — how it decomposed a task, why it assigned work to a particular worker
+- Rename it: "Lead Coordinator," "Office Manager," "Foreman" — Maria names her Team Lead
+
+The Team Lead has a system prompt constructed from:
+- The canvas goal: what the team is trying to accomplish
+- Worker capabilities: what each wired worker can do
+- Maria's preferences: from past approvals and edits
+- Escalation history: patterns of what Maria has approved or rejected
 
 #### How Wiring Works
 
-A wire between Node A and Node B means: "when Node A completes, pass its output to Node B as input."
+A wire between Worker A and Worker B means: "when Worker A completes, pass its output to Worker B as input."
 
-The coordinator manages the handoff:
-1. Node A completes — produces an output artifact (e.g., a drafted email)
-2. Coordinator receives the artifact — not Node B directly
-3. Coordinator validates the artifact against Node B's expected input schema
-4. If valid, coordinator invokes Node B with the artifact as input
-5. If invalid, coordinator flags a wiring error (Maria sees: "Node B couldn't accept Node A's output — check the wire")
+The Team Lead manages the handoff:
+1. Worker A completes — produces an output artifact (e.g., a drafted email)
+2. Team Lead receives the artifact
+3. Team Lead validates the artifact against Worker B's expected input schema
+4. If valid, Team Lead invokes Worker B with the artifact as input
+5. If invalid, Team Lead flags a wiring error (Maria sees: "Worker B couldn't accept Worker A's output — check the wire")
 
-This keeps nodes decoupled. Node A doesn't need to know about Node B. The coordinator is the only thing that knows the full wire graph.
+This keeps workers decoupled. Worker A doesn't need to know about Worker B. The Team Lead knows the full wire graph.
 
 #### Escalation Flow
 
 ```
-Node A detects escalation condition
+Worker A detects escalation condition
   → Pauses its reasoning
-  → Emits escalation event to coordinator via SSE
-  → Coordinator receives: { node_id, reason, proposed_action, reasoning_trace }
-  → Coordinator pauses Node A's wire outputs (downstream nodes don't receive stale input)
-  → Coordinator routes escalation to Maria (push notification + inbox)
+  → Emits escalation event to Team Lead via SSE
+  → Team Lead receives: { worker_id, reason, proposed_action, reasoning_trace }
+  → Team Lead evaluates: should I route this to Maria, or can I handle it?
+  → If route: Team Lead pauses Worker A's wire outputs
+  → Team Lead routes escalation to Maria (push notification + inbox)
   → Maria resolves: Approve / Edit / Skip / Cancel
-  → Coordinator applies Maria's decision to Node A
-  → Coordinator resumes Node A or terminates based on decision
+  → Team Lead applies Maria's decision to Worker A
+  → Team Lead resumes Worker A or terminates based on decision
 ```
 
-**The coordinator's escalation context** includes:
-- Which node escalated
+**The Team Lead's escalation context** includes:
+- Which worker escalated and why
 - The full reasoning trace at the moment of escalation
 - The proposed action and its confidence
-- What downstream nodes would have received (so Maria understands blast radius)
+- What downstream workers would have received (blast radius)
+- Team Lead's own reasoning: why it chose to escalate vs. auto-resolve
 
-#### Coordinator vs. Node Responsibilities
+#### Team Lead vs. Worker Responsibilities
 
-| | Coordinator | Node (Narrow Agent) |
+| | Team Lead | Worker |
 |---|---|---|
-| **Role** | Foreman | Specialist |
-| **Context** | Management: watches traces, knows team state | Work: executes tasks |
-| **Memory** | Team-level: knows which nodes exist, wire graph | Task-level: knows its own job |
-| **LLM calls** | Decides task distribution, routes escalations | Executes tools, drafts outputs |
-| **Visible to Maria?** | Never (implicit) | Always (node on canvas) |
-| **Restart survival** | Always — coordinator is the canvas process | Each node checkpoints independently |
-
-#### Multi-Node Coordination (Phase 2+)
-
-Phase 1 MVP supports 2-3 nodes wired in a simple chain (A → B → C). Phase 2 adds:
-
-- **Parallel fan-out:** Coordinator spawns Node A, which produces outputs for both Node B and Node C simultaneously (A → B and A → C)
-- **Fork/join:** Coordinator spawns parallel workers, waits for all to complete, aggregates results before proceeding
-- **Cross-node state:** Nodes can write to a shared artifact store (not context). Coordinator enforces access. This enables "Node B reads what Node A wrote."
+| **Role** | Foreman / Office Manager | Specialist |
+| **Context** | Team-level: knows all workers, wire graph, task state | Task-level: knows its own job |
+| **Memory** | Full LLM context — can reason across entire team | Bounded — focused on assigned sub-task |
+| **LLM calls** | Task decomposition, escalation triage, result aggregation | Execute tools, draft outputs |
+| **Visible to Maria?** | Always — distinct node on canvas | Always — worker node on canvas |
+| **Tools** | Access to team state, worker orchestration, escalation routing | Access to domain tools (HubSpot, Gmail, etc.) |
+| **Pricing impact** | Burns tokens 24/7 while canvas is active | Burns tokens per task |
 
 #### n8n / Slack / Paperclip Reference Points
 
 | Pattern | Reference |
 |---|---|
 | Canvas (nodes + wires) | n8n — infinite canvas, drag nodes, wire connections |
-| Team communication | Slack — activity feed, push notifications, escalations arrive like messages |
-| Coordinator + approval | Paperclip — foreman model, human-in-the-loop governance |
+| Team Lead as visible coordinator | Paperclip — CEO agent, org chart visible |
+| Activity feed / escalations | Slack — push notifications, escalations arrive like messages |
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -691,7 +702,7 @@ Each node on the canvas is a persistent AI employee. Click to open the node deta
 Maria wires two nodes by dragging from one node's output handle to another node's input handle:
 
 ```
-  Node A (Lead Research)          Node B (Follow-Up)
+  Worker A (Lead Research)       Worker B (Follow-Up)
   ┌──────────────────┐           ┌──────────────────┐
   │ Lead Research    │           │ Follow-Up        │
   │          [out] ──┼──────────▶│ [in]             │
@@ -887,9 +898,9 @@ The classifier **outputs its reasoning**, not just a confidence score. Maria alw
 | Push notifications | Escalations reach Maria immediately |
 | Tool integrations | Gmail, Calendar, HubSpot, Slack OAuth |
 
-**Success condition:** Maria opens the app, sees an empty canvas, drags a Lead Research Agent onto it, and has a working team node running in under 5 minutes. On Day 2, she wakes up to "Lead Research Agent processed 14 leads while you slept." She can trace every lead — which ones, what it did, why — in under 2 minutes.
+**Success condition:** Maria opens the app, sees an empty canvas, and creates a working team in under 5 minutes. She drags a Lead Research archetype onto the canvas, wires it to a Follow-Up archetype — the Team Lead coordinates both. On Day 2, she wakes up to "Team Lead coordinated 14 leads while you slept." She can trace every node's reasoning and every escalation.
 
-**What we are NOT shipping:** Template gallery (beyond 3 agent archetypes), multi-agent, long-term memory, PROACTIVE, Calendar, HubSpot, governance board, auto-pause, skills directory, permission auto-approval, memory integrity verification.
+**What we are NOT shipping:** Template gallery (beyond 3 agent archetypes), long-term memory, PROACTIVE, Calendar, HubSpot, governance board, auto-pause, skills directory, permission auto-approval, memory integrity verification.
 
 ---
 
