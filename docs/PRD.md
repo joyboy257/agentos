@@ -239,12 +239,14 @@ The MVP is not a template or a feature. It is proof of the thesis:
 
 13. **Immutable Audit Trail** — Every tool call is logged with: timestamp, actor, input hash, output hash, LLM reasoning text. Maria can query her full audit history. Logs are tamper-evident (append-only).
 
+14. **Escalation Suggestions** — After every completed run, the agent evaluates whether suggestions apply. It may surface: recurring schedule proposals ("this task ran 3 times — I could run it automatically every Monday"), follow-on task proposals ("you could add a follow-up step after this"), and connector gap alerts ("I tried to use HubSpot but it's not connected"). Suggestions appear as dismissible cards on the canvas. This is the agent self-proposal pattern — the most "agent-like" behavior in Perplexity Computer. Maria can accept, ignore, or refine any suggestion.
+
 ### What Is NOT in the MVP
 
 - **Advanced multi-node orchestration** — MVP supports wiring 2-3 nodes together. Complex fork/join patterns, parallel fan-out, and cross-node state coordination are Phase 2+.
 - **Template gallery** — MVP has 3 pre-built archetypes. Full gallery with 8+ templates ships at Phase 2.
 - **Long-term memory** — Working memory ships in MVP. Cross-session memory (mem0 + Qdrant) ships at Phase 2.
-- **Additional tool integrations** — Gmail, Calendar, HubSpot, Slack. Enough to prove the model.
+- **Additional tool integrations** — Gmail + Google Drive (MVP). HubSpot and Slack ship in Phase 2. Sufficient to prove the model and complete the Monday CSV automation loop. See `docs/plans/2026-04-02-003-feat-agentos-connector-implementation-plan.md`.
 - **Skills directory** — Phase 2
 - **Multi-canvas portfolio** — MVP is one canvas. Phase 2 adds the paperclip-style portfolio view for multiple teams.
 - **Governance board** — Phase 2
@@ -1060,6 +1062,8 @@ The PRD defines *what* we are building. These documents define *how*.
 | **Plan: Canvas UI** | React component specs for infinite canvas, node rendering, wiring, sidebar, and reasoning trace panel. | PRD v5, Design System |
 | **Plan: Gmail Integration** | OAuth flow, token storage, read/compose/send tools, rate limiting. Approved contact list enforcement. | PRD v5, Harness Architecture Reference |
 | **Plan: Audit Trail API** | Immutable step log schema, SHA-256 hashing, append-only enforcement, export endpoints. | PRD v5, Harness Architecture Reference |
+| **Plan: Connector Implementation** | Google Drive, Slack, HubSpot connectors via MCP client. OAuth flows, capability wiring, connector card UI. See `docs/plans/2026-04-02-003-feat-agentos-connector-implementation-plan.md`. | PRD v5, ARCHITECTURE-01, ARCHITECTURE-02 |
+| **ARCHITECTURE-06: Escalation Suggestions** | Agent self-proposal pattern. Post-run reflection, on-demand queries, suggestion types (schedule recurring, follow-on task, connector gap, approval bump). See `docs/ARCHITECTURE-06-escalation-suggestions.md`. | PRD v5, ARCHITECTURE-01 |
 
 #### Phase 2 — Differentiate (Days 90–180)
 
@@ -1072,6 +1076,7 @@ The PRD defines *what* we are building. These documents define *how*.
 | **Plan: Template Gallery** | 8 vertical templates. SKILL.md schema. Gallery UI. Compliance metadata. | PRD v5, Phase 1 |
 | **Plan: Skills Directory** | skills/<name>/SKILL.md schema. Loader. Versioning. | PRD v5, Phase 1 |
 | **Plan: Governance Board** | Tier 2 escalation UI. Server-side verification. | PRD v5, Phase 1 |
+| **Plan: Escalation Suggestions (Mode B)** | On-demand NL query: "any suggestions for my team?" Full suggestion types (schedule recurring, follow-on task, connector gap, approval bump, budget increase). Requires Canvas UI. | PRD v5, Phase 1, ARCHITECTURE-06 |
 | **Ops: mem0.ai Cost Monitoring** | Per-user cost tracking. Alert thresholds. Quotas. | Long-Term Memory plan |
 
 #### Phase 3 — Scale (Days 180–270)
