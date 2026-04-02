@@ -142,6 +142,124 @@ function SnapshotPanel({ snapshot }: { snapshot?: ReasoningSnapshot | null }) {
 }
 
 // ---------------------------------------------------------------------------
+// SuggestionCard — shows post-run escalation suggestions in the modal
+// ---------------------------------------------------------------------------
+
+interface Suggestion {
+  id: string
+  proposal_headline: string
+  proposal_detail: string
+}
+
+interface SuggestionCardProps {
+  suggestions: Suggestion[]
+  onAccept: (id: string) => void
+  onDismiss: (id: string) => void
+}
+
+function SuggestionCard({ suggestions, onAccept, onDismiss }: SuggestionCardProps) {
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+
+  const handleAccept = async (id: string) => {
+    setLoadingId(id)
+    try {
+      await onAccept(id)
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  const handleDismiss = async (id: string) => {
+    setLoadingId(id)
+    try {
+      await onDismiss(id)
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  if (suggestions.length === 0) return null
+
+  return (
+    <div className="suggestion-section">
+      <div className="suggestion-divider" />
+      <div className="suggestion-header">
+        <span className="suggestion-label">While I&apos;m here —</span>
+      </div>
+      {suggestions.map((s) => (
+        <div key={s.id} className="suggestion-card">
+          <p className="suggestion-headline">{s.proposal_headline}</p>
+          <p className="suggestion-detail">{s.proposal_detail}</p>
+          <div className="suggestion-actions">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => handleAccept(s.id)}
+              disabled={loadingId !== null}
+            >
+              {loadingId === s.id ? 'Scheduling...' : 'Schedule It'}
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleDismiss(s.id)}
+              disabled={loadingId !== null}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ))}
+      <style jsx>{`
+        .suggestion-section {
+          padding: 0 24px 16px;
+        }
+        .suggestion-divider {
+          height: 1px;
+          background: var(--border, #e5e7eb);
+          margin-bottom: 16px;
+        }
+        .suggestion-header {
+          margin-bottom: 12px;
+        }
+        .suggestion-label {
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-muted, #6b7280);
+        }
+        .suggestion-card {
+          background: var(--accent, #f3f4f6);
+          border: 1px solid var(--border, #e5e7eb);
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-bottom: 8px;
+        }
+        .suggestion-headline {
+          margin: 0 0 4px;
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-primary, #111827);
+        }
+        .suggestion-detail {
+          margin: 0 0 12px;
+          font-size: 13px;
+          color: var(--text-muted, #6b7280);
+          line-height: 1.4;
+        }
+        .suggestion-actions {
+          display: flex;
+          gap: 8px;
+        }
+        .btn-sm {
+          padding: 6px 12px;
+          font-size: 13px;
+        }
+      `}</style>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // ApprovalModal
 // ---------------------------------------------------------------------------
 
@@ -153,7 +271,14 @@ export function ApprovalModal({
   onCancel,
   onDismiss,
   initialArgs,
-}: ApprovalModalProps) {
+  suggestions = [],
+  onSuggestionAccept,
+  onSuggestionDismiss,
+}: ApprovalModalProps & {
+  suggestions?: Suggestion[]
+  onSuggestionAccept?: (id: string) => Promise<void>
+  onSuggestionDismiss?: (id: string) => Promise<void>
+}) {
   const { toolCallId, iteration, maxIterations } = event.content
   const approvalId = toolCallId // toolCallId is used as the approvalId in our design
 
@@ -336,6 +461,21 @@ export function ApprovalModal({
 
         {/* Snapshot timeline */}
         {mode === 'view' && <SnapshotPanel snapshot={snapshot} />}
+
+        {/* Suggestions */}
+        {suggestions.length > 0 && (
+          <SuggestionCard
+            suggestions={suggestions}
+            onAccept={async (id) => {
+              if (!onSuggestionAccept) return
+              await onSuggestionAccept(id)
+            }}
+            onDismiss={async (id) => {
+              if (!onSuggestionDismiss) return
+              await onSuggestionDismiss(id)
+            }}
+          />
+        )}
 
         {/* Actions */}
         <div className="modal-actions">

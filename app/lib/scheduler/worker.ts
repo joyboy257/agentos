@@ -1,6 +1,7 @@
 import { Worker } from 'bullmq';
 import { getRedisConnection } from './client';
 import { DurableRunner } from '../runtime/durable-runner';
+import { recoverInterruptedRuns } from '../runtime/startup-recovery';
 
 let worker: Worker | null = null;
 
@@ -41,6 +42,8 @@ export function getWorker(): Worker {
 }
 
 export async function startWorker(): Promise<void> {
+  // Recover any runs that were interrupted by the previous shutdown
+  await recoverInterruptedRuns();
   const w = getWorker();
   await w.run();
   console.log('BullMQ worker started');

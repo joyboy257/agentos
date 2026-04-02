@@ -16,3 +16,15 @@ export type { ErrorCode, TranslatedError } from './error-translation'
 export { looksLikePII, isPIIKey, sanitizeValue, redactPII, sanitizeErrorForLog } from './pii-redaction'
 export { ToolCallLogger } from './logger'
 export type { ToolCallLog, ToolCallResult, LogEndInput } from './logger'
+export {
+  CircuitBreaker,
+  circuitBreakers,
+  createCircuitBreaker,
+  circuitBreakerSuccess,
+  circuitBreakerFailure,
+  circuitBreakerCanAttempt,
+  withCircuitBreaker,
+  getCircuitBreakerForTool,
+  getCircuitBreakerStatus,
+} from './circuit-breaker'
+export type { CircuitState, CircuitBreakerConfig } from './circuit-breaker'

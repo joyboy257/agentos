@@ -68,16 +68,20 @@ export async function createCheckpoint(data: {
   tool_name?: string | null;
   tool_call_id?: string | null;
   tool_result?: unknown | null;
+  tool_args?: Record<string, unknown> | null;
+  total_tokens?: number | null;
 }): Promise<Checkpoint> {
   const result = await sql`
-    INSERT INTO checkpoints (run_id, step, state_before, state_after, tool_name, tool_call_id, tool_result)
+    INSERT INTO checkpoints (run_id, step, state_before, state_after, tool_name, tool_call_id, tool_result, tool_args, total_tokens)
     VALUES (
       ${data.run_id}, ${data.step},
       ${data.state_before ? JSON.stringify(data.state_before) : null},
       ${data.state_after ? JSON.stringify(data.state_after) : null},
       ${data.tool_name ?? null},
       ${data.tool_call_id ?? null},
-      ${data.tool_result ? JSON.stringify(data.tool_result) : null}
+      ${data.tool_result ? JSON.stringify(data.tool_result) : null},
+      ${data.tool_args ? JSON.stringify(data.tool_args) : null},
+      ${data.total_tokens ?? null}
     )
     RETURNING *
   `;
@@ -203,4 +207,47 @@ export async function setGmailToken(data: {
 export async function getGmailToken(userId: string): Promise<GmailToken | null> {
   const result = await sql`SELECT * FROM gmail_tokens WHERE user_id = ${userId}`;
   return result.rows[0] as GmailToken ?? null;
+}
+
+// --- ESCALATION SUGGESTIONS ---
+import type { EscalationSuggestion } from '../runtime/escalation-types'
+
+export async function getEscalationSuggestionsForAgent(
+  agentId: string,
+  status?: 'pending' | 'accepted' | 'dismissed' | 'expired'
+): Promise<EscalationSuggestion[]> {
+  if (status) {
+    const result = await sql`
+      SELECT * FROM escalation_suggestions
+      WHERE agent_id = ${agentId} AND status = ${status}
+      ORDER BY created_at DESC
+    `
+    return result.rows as EscalationSuggestion[]
+  }
+  const result = await sql`
+    SELECT * FROM escalation_suggestions
+    WHERE agent_id = ${agentId}
+    ORDER BY created_at DESC
+  `
+  return result.rows as EscalationSuggestion[]
+}
+
+export async function resolveEscalationSuggestion(
+  id: string,
+  resolvedBy: 'accepted' | 'dismissed'
+): Promise<void> {
+  await sql`
+    UPDATE escalation_suggestions
+    SET status = ${resolvedBy}, resolved_at = NOW(), resolved_by = ${resolvedBy}
+    WHERE id = ${id}
+  `
+}
+
+export async function getEscalationSuggestionsForRun(runId: string): Promise<EscalationSuggestion[]> {
+  const result = await sql`
+    SELECT * FROM escalation_suggestions
+    WHERE run_id = ${runId} AND status = 'pending'
+    ORDER BY created_at DESC
+  `
+  return result.rows as EscalationSuggestion[]
 }

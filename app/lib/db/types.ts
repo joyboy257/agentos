@@ -19,6 +19,7 @@ export interface Run {
   agent_id: string;
   user_id: string;
   status: RunStatus;
+  session_id?: string | null;
   started_at: Date | null;
   completed_at: Date | null;
   created_at: Date;
@@ -35,6 +36,9 @@ export interface Checkpoint {
   tool_name: string | null;
   tool_call_id: string | null;
   tool_result: unknown | null;
+  tool_args: Record<string, unknown> | null;
+  messages: unknown[] | null;
+  total_tokens: number | null;
   created_at: Date;
 }
 

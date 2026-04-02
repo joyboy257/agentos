@@ -15,6 +15,7 @@ interface ActiveApproval {
   event: ApprovalRequiredEvent
   snapshot: ReasoningSnapshot | null
   summary: string
+  suggestions: Array<{ id: string; proposal_headline: string; proposal_detail: string }>
 }
 
 // ---------------------------------------------------------------------------
@@ -92,8 +93,24 @@ export default function HomePage() {
 
                 setActiveApprovals(prev => [
                   ...prev,
-                  { event: approvalEvent, snapshot, summary },
+                  { event: approvalEvent, snapshot, summary, suggestions: [] },
                 ])
+
+                // Fetch suggestions for this run to show in the modal
+                const currentRunId = approvalEvent.runId
+                try {
+                  const res = await fetch(`/api/escalation-suggestions?runId=${currentRunId}`)
+                  if (res.ok) {
+                    const data = await res.json()
+                    setActiveApprovals(prev => prev.map(a =>
+                      a.event.content.toolCallId === approvalEvent.content.toolCallId
+                        ? { ...a, suggestions: data.suggestions ?? [] }
+                        : a
+                    ))
+                  }
+                } catch {
+                  // Suggestions are best-effort; don't fail the approval flow
+                }
               }
             } else if (eventType === 'done') {
               const e = data as RunDoneEvent
@@ -216,6 +233,44 @@ export default function HomePage() {
     setActiveApprovals(prev => prev.filter(a => a.event.content.toolCallId !== approvalId))
   }
 
+  const handleSuggestionAccept = async (approvalToolCallId: string, suggestionId: string) => {
+    if (!runId) return
+    try {
+      const res = await fetch('/api/escalation-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: suggestionId, action: 'accepted' }),
+      })
+      if (!res.ok) throw new Error('Failed to accept suggestion')
+      setActiveApprovals(prev => prev.map(a =>
+        a.event.content.toolCallId === approvalToolCallId
+          ? { ...a, suggestions: a.suggestions.filter(s => s.id !== suggestionId) }
+          : a
+      ))
+    } catch (err) {
+      console.error('Failed to accept suggestion:', err)
+    }
+  }
+
+  const handleSuggestionDismiss = async (approvalToolCallId: string, suggestionId: string) => {
+    if (!runId) return
+    try {
+      const res = await fetch('/api/escalation-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: suggestionId, action: 'dismissed' }),
+      })
+      if (!res.ok) throw new Error('Failed to dismiss suggestion')
+      setActiveApprovals(prev => prev.map(a =>
+        a.event.content.toolCallId === approvalToolCallId
+          ? { ...a, suggestions: a.suggestions.filter(s => s.id !== suggestionId) }
+          : a
+      ))
+    } catch (err) {
+      console.error('Failed to dismiss suggestion:', err)
+    }
+  }
+
   const handleRunDone = (e: RunDoneEvent) => {
     setMessages(m => [...m, { role: 'bot', content: e.summary }])
     setAgentStatuses(new Map())
@@ -308,6 +363,9 @@ export default function HomePage() {
           }}
           onCancel={handleCancel}
           onDismiss={handleDismissApproval}
+          suggestions={approval.suggestions}
+          onSuggestionAccept={(id) => handleSuggestionAccept(approval.event.content.toolCallId, id)}
+          onSuggestionDismiss={(id) => handleSuggestionDismiss(approval.event.content.toolCallId, id)}
         />
       ))}
 

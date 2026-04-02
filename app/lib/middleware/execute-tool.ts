@@ -10,6 +10,7 @@ import { withRetry, DEFAULT_RETRY_CONFIG, calculateDelay, RetryConfig, getRetryB
 import { translateToolError } from './error-translation'
 import { ToolCallLogger, LogEndInput } from './logger'
 import { sanitizeErrorForLog } from './pii-redaction'
+import { withCircuitBreaker, getCircuitBreakerForTool } from './circuit-breaker'
 
 export interface ToolCallConfig {
   timeoutMs?: number
@@ -65,6 +66,7 @@ export async function executeTool<T>(
   let retriesAttempted = 0
 
   const outerSignal = config.abortSignal
+  const breaker = getCircuitBreakerForTool(toolName)
 
   while (attempt <= retryConfig.maxRetries + 1) {
     checkAbortSignal(outerSignal)
@@ -84,7 +86,7 @@ export async function executeTool<T>(
 
       result = await withTimeout(
         toolName,
-        toolFn(currentController.signal),
+        () => withCircuitBreaker(() => toolFn(currentController.signal), breaker),
         timeoutMs,
         currentController.signal
       )
