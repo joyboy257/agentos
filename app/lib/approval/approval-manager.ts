@@ -27,6 +27,7 @@ import { eventBufferRegistry } from '@/lib/tracing/event-buffer'
 import type { ApprovalRequiredEvent, ApprovalResolvedEvent } from '@/lib/tracing/event-schema'
 import { getHookRegistry } from '@/lib/hooks'
 import type { HookContext } from '@/lib/hooks/types'
+import { sendApprovalPush } from '@/lib/push-notifications'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -181,6 +182,15 @@ export async function requestApproval(request: ApprovalRequest): Promise<Resolve
         fields,
       },
     })
+
+    // Send push notification to subscribed browsers — fire and forget
+    void sendApprovalPush({
+      runId,
+      agentId,
+      toolName,
+      summary,
+      toolCallId,
+    }).catch(err => console.warn('[push] sendApprovalPush error:', err))
 
     // Emit approval_required SSE event via the SSE channel (Unit 5a)
     const approvalEvent: ApprovalRequiredEvent = {

@@ -1,11 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
+import { getUserId } from '@/lib/auth/middleware-helpers';
 
 export async function GET(request: Request) {
-  const userId = request.headers.get('x-user-id');
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const userId = await getUserId(request);
 
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get('page') ?? '1', 10);

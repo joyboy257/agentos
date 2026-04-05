@@ -40,7 +40,7 @@ async function runTests() {
   let failed = 0
 
   for (const test of TEST_PAIRS) {
-    const result = await interpret(test.goal, 10000)
+    const result = await interpret(test.goal, { timeoutMs: 10000 })
 
     if (test.shouldClarify && !result.ok && 'clarification' in result) {
       console.log(`✓ PASS: "${test.goal}" -> clarification`)

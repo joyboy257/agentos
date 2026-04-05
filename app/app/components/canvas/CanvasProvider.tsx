@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { useNodesState, useEdgesState } from '@xyflow/react'
 import type { Node, Edge } from '@xyflow/react'
+import { ulid } from 'ulid'
 
 export type NodeStatus = 'running' | 'idle' | 'stopped' | 'scheduled' | 'error' | 'waiting'
 
@@ -18,6 +19,7 @@ export interface AgentNodeData extends Record<string, unknown> {
   nextWakeAt?: string | null
   budgetUsedPercent?: number
   workerCount?: number
+  runId?: string
 }
 
 export type CanvasNode = Node<AgentNodeData, 'agent'>
@@ -30,6 +32,18 @@ interface CanvasContextValue {
   selectedNodeId: string | null
   setSelectedNodeId: (id: string | null) => void
   selectedNode: CanvasNode | null
+  activeEscalationId: string | null
+  setActiveEscalationId: (id: string | null) => void
+  addGraphAgents: (agents: Array<{
+    id: string
+    name: string
+    role: string
+    archetype?: 'Ingest' | 'Process' | 'Distill'
+    tools: string[]
+    description?: string
+    position_x: number
+    position_y: number
+  }>, connections: Array<{ source: string; target: string }>) => void
 }
 
 const CanvasContext = createContext<CanvasContextValue | null>(null)
@@ -137,11 +151,77 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   const [nodes, setNodes] = useNodesState(initialNodes)
   const [edges, setEdges] = useEdgesState(initialEdges)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [activeEscalationId, setActiveEscalationId] = useState<string | null>(null)
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null
 
+  const addGraphAgents = (
+    agents: Array<{
+      id: string
+      name: string
+      role: string
+      archetype?: 'Ingest' | 'Process' | 'Distill'
+      tools: string[]
+      description?: string
+      position_x: number
+      position_y: number
+    }>,
+    connections: Array<{ source: string; target: string }>
+  ) => {
+    const newNodes: CanvasNode[] = agents.map((agent) => ({
+      id: agent.id,
+      type: 'agent',
+      position: { x: agent.position_x, y: agent.position_y },
+      data: {
+        name: agent.name,
+        role: 'Worker',
+        archetype: agent.archetype,
+        status: 'idle' as NodeStatus,
+        tools: agent.tools,
+        runCountToday: 0,
+        escalatedCountToday: 0,
+        lastRunAt: null,
+        nextWakeAt: null,
+        budgetUsedPercent: 0,
+      },
+    }))
+
+    const newEdges: Edge[] = connections.map((conn) => ({
+      id: `nl-${ulid()}`,
+      source: conn.source,
+      target: conn.target,
+      type: 'labeled',
+      data: { label: 'feeds' },
+    }))
+
+    // Also wire each new worker to the Team Lead
+    const teamLeadEdge: Edge = {
+      id: `nl-tl-${ulid()}`,
+      source: 'team-lead-1',
+      target: agents[0]?.id ?? '',
+      type: 'labeled',
+      data: { label: 'triggers' },
+    }
+
+    setNodes((prev) => [...prev, ...newNodes])
+    setEdges((prev) => [...prev, ...newEdges, teamLeadEdge].filter(e => e.target !== ''))
+  }
+
   return (
-    <CanvasContext.Provider value={{ nodes, edges, setNodes, setEdges, selectedNodeId, setSelectedNodeId, selectedNode }}>
+    <CanvasContext.Provider
+      value={{
+        nodes,
+        edges,
+        setNodes,
+        setEdges,
+        selectedNodeId,
+        setSelectedNodeId,
+        selectedNode,
+        activeEscalationId,
+        setActiveEscalationId,
+        addGraphAgents,
+      }}
+    >
       {children}
     </CanvasContext.Provider>
   )

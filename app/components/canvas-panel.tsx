@@ -15,6 +15,7 @@ interface CanvasPanelProps {
   onStatusUpdate?: (event: AgentStatusEvent) => void
   onRunDone?: (event: RunDoneEvent) => void
   onRunError?: (event: RunErrorEvent) => void
+  onRunIdReceived?: (runId: string) => void
 }
 
 export function CanvasPanel({
@@ -24,6 +25,7 @@ export function CanvasPanel({
   onStatusUpdate,
   onRunDone,
   onRunError,
+  onRunIdReceived,
 }: CanvasPanelProps) {
   const [agentStatuses, setAgentStatuses] = useState<Record<string, 'ready' | 'running' | 'waiting' | 'completed' | 'error'>>({})
 
@@ -190,6 +192,7 @@ export function CanvasPanel({
           onStatusUpdate={handleStatusUpdate}
           onRunDone={handleRunDone}
           onRunError={handleRunError}
+          onRunIdReceived={onRunIdReceived}
         />
       )}
     </div>

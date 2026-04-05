@@ -1,28 +1,16 @@
 'use client'
 
 import { TemplateCard } from './template-card'
-
-const templates = [
-  {
-    name: 'Customer Email Agent',
-    agents: ['reader', 'drafter', 'sender'],
-  },
-  {
-    name: 'Lead Research Agent',
-    agents: ['researcher', 'enricher'],
-  },
-  {
-    name: 'Customer Support Agent',
-    agents: ['reader', 'responder', 'escalator'],
-  },
-]
+import { listTemplates, type AgentTemplate } from '@/lib/tools/templates'
 
 interface TemplateGalleryProps {
   onTemplateSelect: (goal: string) => void
 }
 
 export function TemplateGallery({ onTemplateSelect }: TemplateGalleryProps) {
-  const handleTemplateClick = (template: typeof templates[0]) => {
+  const templates = listTemplates()
+
+  const handleTemplateClick = (template: AgentTemplate) => {
     const goal = `Build a ${template.name.toLowerCase()} workflow`
     onTemplateSelect(goal)
   }
@@ -60,10 +48,9 @@ export function TemplateGallery({ onTemplateSelect }: TemplateGalleryProps) {
       >
         {templates.map((template) => (
           <TemplateCard
-            key={template.name}
-            name={template.name}
-            agents={template.agents}
-            onClick={() => handleTemplateClick(template)}
+            key={template.id}
+            template={template}
+            onSelect={handleTemplateClick}
           />
         ))}
       </div>

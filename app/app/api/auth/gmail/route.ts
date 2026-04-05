@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { saveGmailTokenForUser } from '@/lib/gmail/client'
 import { exchangeCodeForTokens } from '@/lib/gmail/oauth'
+import { getUserId } from '@/lib/auth/middleware-helpers'
 
 // Google OAuth2 configuration
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
@@ -8,12 +9,7 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
 const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/gmail/callback`
 
 export async function GET(request: NextRequest) {
-  // Get user from session (set by middleware)
-  const userId = request.headers.get('x-user-id')
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const userId = await getUserId(request)
 
   const code = request.nextUrl.searchParams.get('code')
 

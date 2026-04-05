@@ -8,12 +8,14 @@ interface RunButtonProps {
   graph: AgentGraph
   /** Called when the run button is clicked, before SSE starts */
   onRunStart?: (graph: AgentGraph) => void
+  /** Called once the runId is received from the SSE stream */
+  onRunIdReceived?: (runId: string) => void
   onStatusUpdate: (event: AgentStatusEvent) => void
   onRunDone: (event: RunDoneEvent) => void
   onRunError: (event: RunErrorEvent) => void
 }
 
-export function RunButton({ graph, onRunStart, onStatusUpdate, onRunDone, onRunError }: RunButtonProps) {
+export function RunButton({ graph, onRunStart, onRunIdReceived, onStatusUpdate, onRunDone, onRunError }: RunButtonProps) {
   const [running, setRunning] = useState(false)
 
   const handleRun = async () => {
@@ -55,7 +57,13 @@ export function RunButton({ graph, onRunStart, onStatusUpdate, onRunDone, onRunE
           if (dataEnd === -1) break
           const data = JSON.parse(buffer.slice(i, dataEnd))
           i = dataEnd + 2
-          if (eventType === 'status') onStatusUpdate(data as AgentStatusEvent)
+          if (eventType === 'run_started') {
+            onRunIdReceived?.(data.runId as string)
+            // Fire custom events for canvas wiring
+            document.dispatchEvent(new CustomEvent('open-reasoning-panel'))
+            document.dispatchEvent(new CustomEvent('run-started', { detail: { runId: data.runId as string } }))
+          }
+          else if (eventType === 'status') onStatusUpdate(data as AgentStatusEvent)
           else if (eventType === 'done') { onRunDone(data as RunDoneEvent); setRunning(false) }
           else if (eventType === 'error') { onRunError(data as RunErrorEvent); setRunning(false) }
         }
