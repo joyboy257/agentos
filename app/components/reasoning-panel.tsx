@@ -75,6 +75,8 @@ function getEventSummary(event: ReasoningEvent): string {
       return `Completed: ${content.summary}`
     case 'error':
       return `Error: ${content.message}`
+    default:
+      return `Event: ${event.type}`
   }
 }
 

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { interpret } from '@/lib/nl/interpret'
 import { getUserId } from '@/lib/auth/middleware-helpers'
+import { getSessionFromCookie } from '@/lib/auth/session'
+import { ulid } from 'ulid'
+import { createGovernanceAction } from '@/lib/db/queries'
 import type { AgentGraph, Connection, Agent, ClarificationOption, AgentRole } from '@/lib/nl/types'
+import { AVAILABLE_TOOLS } from '@/lib/nl/agent-registry'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -41,12 +45,14 @@ export interface NLToCanvasResponse {
     connections: Connection[]
   }
   explanation: string
-  confidence: number
+  confidence?: number
   ambiguousFields?: string[]
   needsClarification?: boolean
   question?: string
   options?: ClarificationOption[]
   error?: string
+  governance_required?: boolean
+  new_tools?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +146,10 @@ export async function GET(req: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
-  await getUserId(req) // Auth only, userId not used in this handler
+  const session = await getSessionFromCookie()
+  if (!session?.userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   let body: NLToCanvasRequest
   try {
@@ -188,6 +197,33 @@ export async function POST(req: NextRequest) {
       { error: result.message, explanation: '', confidence: 0 } satisfies NLToCanvasResponse,
       { status: 422 }
     )
+  }
+
+  // ---------------------------------------------------------------------------
+  // Governance check: if new agents use tools not in AVAILABLE_TOOLS, create a
+  // governance action and return governance_required instead of proceeding.
+  // ---------------------------------------------------------------------------
+  const existingTools = new Set(existingCanvas.flatMap(a => a.tools))
+  const newTools = result.graph.agents.flatMap(a => a.tools).filter(t => !existingTools.has(t) && !AVAILABLE_TOOLS.includes(t as any))
+  if (newTools.length > 0) {
+    const governancePayload = JSON.stringify({
+      goal: body.goal,
+      agents: result.graph.agents,
+      new_tools: newTools,
+      canvas_id: body.teamId,
+    })
+    await createGovernanceAction({
+      id: ulid(),
+      user_id: session.userId,
+      canvas_id: body.teamId,
+      action_type: 'new_agent',
+      payload_json: governancePayload,
+    })
+    return NextResponse.json({
+      governance_required: true,
+      explanation: 'This request introduces new tools that need governance review before activation.',
+      new_tools: newTools,
+    } satisfies NLToCanvasResponse)
   }
 
   // Assign positions to the new agents

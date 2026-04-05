@@ -1,41 +1,34 @@
+/**
+ * Session compat layer — delegates to BetterAuth while keeping
+ * the same function signatures used throughout the app.
+ */
+import { auth } from '@/lib/auth'
 import { cookies } from 'next/headers'
-import { getSession, deleteSession } from '@/lib/db/queries'
-import { createSession } from '@/lib/db/queries'
-import { nanoid } from 'nanoid'
-
-const SESSION_COOKIE = 'agentos_session'
-const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 export async function getSessionFromCookie() {
+  // Use next/headers cookies - works in server context
   const cookieStore = await cookies()
-  const sessionId = cookieStore.get(SESSION_COOKIE)?.value
-  if (!sessionId) return null
-  return getSession(sessionId)
+  const cookieHeader = cookieStore.toString()
+  if (!cookieHeader) return null
+  const result = await auth.api.getSession({ headers: { cookie: cookieHeader } })
+  return result?.session ?? null
 }
 
 export async function createSessionForUser(userId: string) {
+  // BetterAuth creates sessions internally during email verification.
+  // This function is kept for compatibility but sessions are created
+  // via the magic link verification flow.
   const cookieStore = await cookies()
-  const sessionId = nanoid(32)
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS)
-
-  await createSession({ id: sessionId, user_id: userId, expiresAt })
-
-  cookieStore.set(SESSION_COOKIE, sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    expires: expiresAt,
-    path: '/',
-  })
-
-  return sessionId
+  // Trigger session creation by calling getSession which will refresh
+  const cookieHeader = cookieStore.toString()
+  await auth.api.getSession({ headers: { cookie: cookieHeader } })
 }
 
 export async function deleteSessionCookie() {
   const cookieStore = await cookies()
-  const sessionId = cookieStore.get(SESSION_COOKIE)?.value
-  if (sessionId) {
-    await deleteSession(sessionId)
+  const cookieHeader = cookieStore.toString()
+  if (cookieHeader) {
+    await auth.api.signOut({ headers: { cookie: cookieHeader } })
   }
-  cookieStore.delete(SESSION_COOKIE)
+  cookieStore.delete('agentos_session')
 }

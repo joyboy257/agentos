@@ -12,7 +12,7 @@ export interface Agent {
   updated_at: Date;
 }
 
-export type AgentStatus = 'idle' | 'running' | 'waiting_for_approval' | 'paused' | 'completed' | 'failed';
+export type AgentStatus = 'idle' | 'running' | 'waiting_for_approval' | 'paused' | 'paused_budget' | 'completed' | 'failed';
 
 export interface Run {
   id: string;

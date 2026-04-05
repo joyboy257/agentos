@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
 
   await savePushSubscription({
-    userId: session.user_id,
+    userId: session.userId,
     endpoint,
     p256dh: keys.p256dh,
     auth: keys.auth,

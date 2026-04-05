@@ -28,7 +28,7 @@ export async function authMiddleware(request: NextRequest) {
 
     // Add userId to request headers for downstream handlers
     const headers = new Headers(request.headers);
-    headers.set('x-user-id', session.user_id);
+    headers.set('x-user-id', session.userId);
 
     return NextResponse.next({ request: { headers } });
   }

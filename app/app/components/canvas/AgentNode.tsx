@@ -5,6 +5,7 @@ import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import type { CanvasNode, AgentNodeData } from './CanvasProvider'
 import { Eye } from 'lucide-react'
+import { AgentCard } from './AgentCard'
 
 const statusColors: Record<AgentNodeData['status'], string> = {
   running: '#22c55e',
@@ -13,6 +14,7 @@ const statusColors: Record<AgentNodeData['status'], string> = {
   scheduled: '#f59e0b',
   error: '#ef4444',
   waiting: '#60a5fa',
+  paused_budget: '#f59e0b',
 }
 
 const roleColors: Record<AgentNodeData['role'], string> = {
@@ -107,7 +109,7 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
               fontWeight: 400,
             }}
           >
-            {nodeData.status === 'running' ? 'Running' : nodeData.status === 'scheduled' ? 'Scheduled' : 'Idle'}
+            {nodeData.status === 'running' ? 'Running' : nodeData.status === 'scheduled' ? 'Scheduled' : nodeData.status === 'paused_budget' ? 'Budget exceeded' : 'Idle'}
           </span>
           <span
             style={{
@@ -120,6 +122,7 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
             }}
           />
         </div>
+        <AgentCard data={{ ...nodeData, nodeId: id }} />
       </div>
 
       {/* Agent name */}
@@ -197,6 +200,36 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
             }}
           />
           Needs input
+        </div>
+      )}
+
+      {/* Budget exceeded badge */}
+      {nodeData.status === 'paused_budget' && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 8px',
+            background: '#fef3c7',
+            borderRadius: 9999,
+            fontSize: 10,
+            fontWeight: 600,
+            color: '#92400e',
+            width: 'fit-content',
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: '#f59e0b',
+              flexShrink: 0,
+              animation: 'pulse 1.5s ease-in-out infinite',
+            }}
+          />
+          Budget exceeded
         </div>
       )}
 

@@ -17,7 +17,7 @@ import LabeledEdge from './LabeledEdge'
 import { NodeDetailPanel } from './NodeDetailPanel'
 import { NLPromptBar } from './NLPromptBar'
 import { EscalationCard, DEMO_ESCALATION, type EscalationData } from './EscalationCard'
-import { ReasoningPanel } from '@/components/reasoning-panel'
+import { TracePanel } from './TracePanel'
 import type { NLToCanvasResult } from '@/app/hooks/useNLToCanvas'
 import { subscribeToRunChannel } from '@/lib/tracing/sse-stream'
 import {
@@ -60,9 +60,10 @@ function FitViewButton() {
 }
 
 function CanvasContent() {
-  const { nodes, edges, setSelectedNodeId, addGraphAgents, setActiveEscalationId } = useCanvas()
+  const { nodes, edges, setSelectedNodeId, addGraphAgents, setActiveEscalationId, selectedNode } = useCanvas()
   const [activeEscalation, setActiveEscalationLocal] = useState<EscalationData | null>(null)
   const [isTraceOpen, setIsTraceOpen] = useState(false)
+  const [traceRunId, setTraceRunId] = useState<string | null>(null)
 
   const onConnect = useCallback(async (connection: Connection) => {
     if (!connection.source || !connection.target) return
@@ -135,7 +136,9 @@ function CanvasContent() {
 
   // Listen for open-reasoning-panel custom event from NodeDetailPanel or RunButton
   useEffect(() => {
-    const handleOpenReasoningPanel = () => {
+    const handleOpenReasoningPanel = (e: Event) => {
+      const customEvent = e as CustomEvent<{ runId: string }>
+      setTraceRunId(customEvent.detail?.runId ?? null)
       setIsTraceOpen(true)
     }
     document.addEventListener('open-reasoning-panel', handleOpenReasoningPanel)
@@ -299,6 +302,27 @@ function CanvasContent() {
           onEdit={handleEdit}
           onCancel={handleCancel}
         />
+      )}
+
+      {/* Reasoning trace panel — bottom-right, above debug trigger */}
+      {(isTraceOpen || selectedNode?.data?.runId) && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 16,
+            zIndex: 40,
+            maxWidth: 440,
+            width: '100%',
+          }}
+        >
+          <TracePanel
+            runId={traceRunId ?? selectedNode?.data?.runId ?? null}
+            isOpen={isTraceOpen}
+            onToggle={() => setIsTraceOpen(false)}
+            maxHeight={400}
+          />
+        </div>
       )}
     </div>
   )

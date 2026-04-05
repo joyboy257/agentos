@@ -5,7 +5,7 @@ import { useNodesState, useEdgesState } from '@xyflow/react'
 import type { Node, Edge } from '@xyflow/react'
 import { ulid } from 'ulid'
 
-export type NodeStatus = 'running' | 'idle' | 'stopped' | 'scheduled' | 'error' | 'waiting'
+export type NodeStatus = 'running' | 'idle' | 'stopped' | 'scheduled' | 'error' | 'waiting' | 'paused_budget'
 
 export interface AgentNodeData extends Record<string, unknown> {
   name: string
@@ -20,6 +20,7 @@ export interface AgentNodeData extends Record<string, unknown> {
   budgetUsedPercent?: number
   workerCount?: number
   runId?: string
+  nodeId?: string
 }
 
 export type CanvasNode = Node<AgentNodeData, 'agent'>

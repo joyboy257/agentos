@@ -2,7 +2,7 @@
 
 export interface AgentCardProps {
   agent: { id: string; name: string; role: string; tools: string[]; description?: string }
-  status: 'ready' | 'running' | 'waiting' | 'completed' | 'error' | 'pending_approval' | 'skipped'
+  status: 'ready' | 'running' | 'waiting' | 'completed' | 'error' | 'pending_approval' | 'skipped' | 'paused_budget' | 'idle' | 'stopped' | 'scheduled' | 'budget_exceeded'
   milestone?: string
   style?: React.CSSProperties
 }

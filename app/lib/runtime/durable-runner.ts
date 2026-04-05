@@ -15,6 +15,7 @@ import {
   getRun,
   getAgent,
   updateRunStatus,
+  updateAgentStatus,
   createCheckpoint,
   getCheckpointsForRun,
   createApproval,
@@ -69,6 +70,15 @@ function emitFromReasoningEvent(
     case 'done':
       // Agent done — handled via postAgentRun below
       break
+    case 'budget_exceeded':
+      void hooks.emit('budgetPaused', {
+        runId,
+        agentId,
+        timestamp: Date.now(),
+        budgetPaused: { elapsedMs: 0, budgetMs: 0 },
+      })
+      break
+    // paused_budget is a DB/canvas status, not a reasoning event type — no hook needed
   }
 }
 
@@ -259,6 +269,21 @@ export class DurableRunner implements Runner {
     let finalStopReason = ''
     let agentStatus: 'completed' | 'error' = 'completed'
     let resultMessages: unknown[] = []
+    let elapsedMs = 0
+
+    // Budget enforcement callback — called when budget is exhausted
+    const onBudgetExceeded = async (elapsed: number, budgetMs: number) => {
+      console.warn(`[Budget] Agent ${agentId} exceeded budget: ${elapsed}ms / ${budgetMs}ms`)
+      // Pause agent in DB
+      await updateAgentStatus(agentId, 'paused_budget')
+      // Emit hook event for canvas UI
+      void hooks.emit('budgetPaused', {
+        runId,
+        agentId,
+        timestamp: Date.now(),
+        budgetPaused: { elapsedMs: elapsed, budgetMs },
+      })
+    }
 
     try {
       const result = await streamingToolExecutor({
@@ -269,16 +294,26 @@ export class DurableRunner implements Runner {
         messages: allMessages,
         tools: agentTools,
         maxTokens: 4096,
+        budgetMs: agent.budget_ms,
+        elapsedMs,
         onEvent,
+        onBudgetExceeded,
         signal: context.signal,
       })
 
       finalStopReason = result.stopReason
       resultMessages = result.messages
+      elapsedMs = result.elapsedMs
 
       // Handle approval_required — create pending approval and return
       if (finalStopReason === 'approval_required') {
         await updateRunStatus(runId, 'waiting_for_approval')
+        running.delete(agentId)
+        return
+      }
+
+      // Handle budget exceeded — agent is already paused via onBudgetExceeded callback
+      if (finalStopReason === 'budget_exceeded') {
         running.delete(agentId)
         return
       }
@@ -320,5 +355,29 @@ export class DurableRunner implements Runner {
 
     completions.set(agentId, { stopReason: finalStopReason })
     running.delete(agentId)
+  }
+
+  /**
+   * Enqueue an immediate proactive job for this agent.
+   * Used by the gmail_push webhook flow — wakes the agent outside of cron.
+   *
+   * Note: This is a thin wrapper that delegates to the proactive queue.
+   * The actual job processing is handled by getProactiveWorker() in proactive-queue.ts.
+   */
+  static async enqueueImmediate(
+    agentId: string,
+    userId: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    const { enqueueGmailPush } = await import('./proactive-queue')
+    await enqueueGmailPush({
+      agentId,
+      userId,
+      threadId: (payload.threadId as string) ?? '',
+      messageId: (payload.messageId as string) ?? '',
+      from: (payload.from as string) ?? '',
+      subject: (payload.subject as string) ?? '',
+      snippet: payload.snippet as string | undefined,
+    })
   }
 }

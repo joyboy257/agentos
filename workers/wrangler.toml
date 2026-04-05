@@ -1,0 +1,30 @@
+name = "agentos-nl-interpret"
+main = "src/index.ts"
+compatibility_date = "2024-04-04"
+
+[observability]
+enabled = true
+
+# AI Gateway configuration
+# Route through Cloudflare AI Gateway for prompt caching + semantic deduplication
+[ai_gateway]
+provider = "openai"  # or "anthropic" for Claude
+api_key = { binding = "AI_GATEWAY_API_KEY" }
+
+# Secrets (set via `wrangler secret put`):
+# AI_GATEWAY_API_KEY - Cloudflare AI Gateway API key
+# OPENAI_API_KEY - OpenAI API key (or Anthropic key if provider = "anthropic")
+
+[[observability.logpush]]
+enabled = true
+
+# Per-request timeout
+[triggers]
+max_execution_model = "default"
+
+# Environment-specific config
+[env.production]
+name = "agentos-nl-interpret"
+
+[env.staging]
+name = "agentos-nl-interpret-staging"

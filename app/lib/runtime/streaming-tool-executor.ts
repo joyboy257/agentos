@@ -22,12 +22,17 @@ import { webSearchTool } from './tools/web'
 import { generateIdempotencyKey } from './idempotency'
 import { createCheckpoint } from '../db/queries'
 import { getHookRegistry } from '../hooks/hook-registry'
+import { classifyToolCall, shouldAutoApprove, shouldExecuteAndNotify } from '../classifier/transcript-classifier'
+import type { ClassifierDecision } from '../classifier/classifier-prompt'
 
 // ---------------------------------------------------------------------------
 // Anthropic API client — uses fetch to call the streaming messages API
 // ---------------------------------------------------------------------------
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
+
+// Estimated cost in ms for an LLM API call (prompt + streaming response)
+const ESTIMATED_LLM_CALL_MS = 1000
 
 interface AnthropicMessage {
   role: 'user' | 'assistant'
@@ -108,7 +113,7 @@ async function dispatchTool(
 // ---------------------------------------------------------------------------
 
 export interface ReasoningEvent {
-  type: 'status' | 'action' | 'approval_required' | 'done' | 'error'
+  type: 'status' | 'action' | 'approval_required' | 'done' | 'error' | 'budget_exceeded'
   agentId: string
   status?: string
   message?: string
@@ -131,7 +136,10 @@ export interface StreamingExecutorOptions {
   tools: string[]  // capability IDs or tool names
   maxTokens?: number
   model?: string
+  budgetMs?: number | null
+  elapsedMs?: number
   onEvent?: (event: ReasoningEvent) => void
+  onBudgetExceeded?: (elapsedMs: number, budgetMs: number) => void
   signal?: AbortSignal
 }
 
@@ -156,7 +164,7 @@ function parseSSE(line: string): AnthropicStreamEvent | null {
 
 export async function streamingToolExecutor(
   options: StreamingExecutorOptions
-): Promise<{ messages: AnthropicMessage[]; stopReason: string }> {
+): Promise<{ messages: AnthropicMessage[]; stopReason: string; elapsedMs: number }> {
   const {
     runId,
     agentId,
@@ -166,12 +174,18 @@ export async function streamingToolExecutor(
     tools,
     maxTokens = 4096,
     model = 'claude-sonnet-4-20250514',
+    budgetMs,
+    elapsedMs: initialElapsedMs = 0,
     onEvent,
+    onBudgetExceeded,
     signal,
   } = options
 
   const context: ToolContext = { runId, agentId, userId, orgId, signal }
   const hooks = getHookRegistry()
+
+  // Track elapsed time for budget enforcement
+  let elapsedMs = initialElapsedMs
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -210,7 +224,13 @@ export async function streamingToolExecutor(
 
   while (true) {
     if (signal?.aborted) {
-      return { messages: inputMessages, stopReason: 'aborted' }
+      return { messages: inputMessages, stopReason: 'aborted', elapsedMs }
+    }
+
+    // Budget check before LLM call
+    if (budgetMs != null && elapsedMs + ESTIMATED_LLM_CALL_MS > budgetMs) {
+      onBudgetExceeded?.(elapsedMs, budgetMs)
+      return { messages: inputMessages, stopReason: 'budget_exceeded', elapsedMs }
     }
 
     // Emit thinking status
@@ -297,14 +317,17 @@ export async function streamingToolExecutor(
             if (pendingToolCalls.length === 0) {
               if (stopReason === 'end_turn' || stopReason === 'completed') {
                 onEvent?.({ type: 'done', agentId, message: currentText })
-                return { messages: inputMessages, stopReason }
+                return { messages: inputMessages, stopReason, elapsedMs }
               }
-              return { messages: inputMessages, stopReason }
+              return { messages: inputMessages, stopReason, elapsedMs }
             }
             break
         }
       }
     }
+
+    // Account for the LLM API call time
+    elapsedMs += ESTIMATED_LLM_CALL_MS
 
     // 3. Partition collected tool calls into reads vs writes
     const toolCalls: ToolCall[] = pendingToolCalls.map((tc) => ({
@@ -382,9 +405,98 @@ export async function streamingToolExecutor(
         tool_call_id: idempotencyKey,
       })
 
-      // Check permission level
+      // Check permission level — needs_approval tools go through classifier
       const permissionLevel = toolDef?.permissionLevel ?? 'safe'
       if (permissionLevel === 'needs_approval' || permissionLevel === 'admin_only') {
+        // Run classifier to decide whether to auto-approve or escalate
+        const classifierDecision: ClassifierDecision = await classifyToolCall({
+          toolName: tc.name,
+          args: tc.args,
+          agentRole: 'agent', // TODO: wire through agent.role from agentId lookup
+          userId,
+        })
+
+        if (shouldAutoApprove(classifierDecision)) {
+          // Auto-approve: dispatch immediately and log the decision
+          onEvent?.({ type: 'action', agentId, tool: tc.name, status: 'running' })
+          void hooks.emit('preToolCall', {
+            runId,
+            agentId,
+            timestamp: Date.now(),
+            preToolCall: { toolName: tc.name, args: tc.args },
+          })
+
+          const result = await dispatchTool(tc.name, tc.args, context)
+          writeResults.push({ tool_call_id: tc.id, ...result })
+
+          // Post-execution checkpoint
+          await createCheckpoint({
+            run_id: runId,
+            step,
+            state_after: { agentId, completed: true, toolName: tc.name },
+            tool_result: result,
+            tool_call_id: idempotencyKey,
+          })
+
+          void hooks.emit('postToolCall', {
+            runId,
+            agentId,
+            timestamp: Date.now(),
+            toolName: tc.name,
+            postToolCall: { toolName: tc.name, result, durationMs: 0 },
+          })
+
+          if (result.success) {
+            onEvent?.({ type: 'action', agentId, tool: tc.name, status: 'completed', result: result.data })
+          } else {
+            onEvent?.({ type: 'error', agentId, tool: tc.name, error: result.error })
+          }
+
+          step++
+          continue
+        }
+
+        if (shouldExecuteAndNotify(classifierDecision)) {
+          // Execute and notify: dispatch, then send notification to Maria afterward
+          onEvent?.({ type: 'action', agentId, tool: tc.name, status: 'running' })
+          void hooks.emit('preToolCall', {
+            runId,
+            agentId,
+            timestamp: Date.now(),
+            preToolCall: { toolName: tc.name, args: tc.args },
+          })
+
+          const result = await dispatchTool(tc.name, tc.args, context)
+          writeResults.push({ tool_call_id: tc.id, ...result })
+
+          // Post-execution checkpoint
+          await createCheckpoint({
+            run_id: runId,
+            step,
+            state_after: { agentId, completed: true, toolName: tc.name },
+            tool_result: result,
+            tool_call_id: idempotencyKey,
+          })
+
+          void hooks.emit('postToolCall', {
+            runId,
+            agentId,
+            timestamp: Date.now(),
+            toolName: tc.name,
+            postToolCall: { toolName: tc.name, result, durationMs: 0 },
+          })
+
+          if (result.success) {
+            onEvent?.({ type: 'action', agentId, tool: tc.name, status: 'completed', result: result.data })
+          } else {
+            onEvent?.({ type: 'error', agentId, tool: tc.name, error: result.error })
+          }
+
+          step++
+          continue
+        }
+
+        // Escalate: fall through to current behavior
         onEvent?.({
           type: 'approval_required',
           agentId,
@@ -398,7 +510,7 @@ export async function streamingToolExecutor(
           preToolCall: { toolName: tc.name, args: tc.args },
         })
         // Return early — caller should handle escalation flow
-        return { messages: inputMessages, stopReason: 'approval_required' }
+        return { messages: inputMessages, stopReason: 'approval_required', elapsedMs }
       }
 
       onEvent?.({ type: 'action', agentId, tool: tc.name, status: 'running' })

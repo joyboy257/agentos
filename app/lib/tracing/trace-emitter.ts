@@ -23,6 +23,7 @@ import {
   DecisionEvent,
   ActionEvent,
   WarningEvent,
+  BudgetPausedEvent,
 } from './event-schema'
 import { EventBuffer, eventBufferRegistry } from './event-buffer'
 import { emitToRunChannel } from './sse-stream'
@@ -225,6 +226,36 @@ export class TraceEmitter {
       content: {
         text,
         severity,
+      },
+      timestamp: Date.now(),
+      version: 1,
+    }
+
+    const signed = this.sign(event)
+    if (signed.integrity) {
+      this.buffer.addEventWithIntegrity(signed)
+      emitToRunChannel(this.runId, signed)
+    } else {
+      this.buffer.addEvent(this.agentId, event.type, event.content)
+      emitToRunChannel(this.runId, signed)
+    }
+  }
+
+  /**
+   * Emit a budget paused event.
+   * e.g., "Budget exhausted after N ms — agent paused"
+   */
+  emitBudgetPaused(elapsedMs: number, budgetMs: number): void {
+    const event: BudgetPausedEvent = {
+      event: 'reasoning',
+      runId: this.runId,
+      agentId: this.agentId,
+      step: this.createStep(),
+      sequence: 0,
+      type: 'paused_budget',
+      content: {
+        elapsedMs,
+        budgetMs,
       },
       timestamp: Date.now(),
       version: 1,
