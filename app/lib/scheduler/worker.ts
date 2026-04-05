@@ -2,6 +2,7 @@ import { Worker } from 'bullmq';
 import { getRedisConnection } from './client';
 import { DurableRunner } from '../runtime/durable-runner';
 import { recoverInterruptedRuns } from '../runtime/startup-recovery';
+import { startProactiveWorker } from '../runtime/proactive-queue';
 
 let worker: Worker | null = null;
 
@@ -46,6 +47,8 @@ export async function startWorker(): Promise<void> {
   await recoverInterruptedRuns();
   const w = getWorker();
   await w.run();
+  // Also start the proactive queue worker for Gmail push immediate jobs
+  await startProactiveWorker();
   console.log('BullMQ worker started');
 }
 

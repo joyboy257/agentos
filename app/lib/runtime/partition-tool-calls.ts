@@ -14,9 +14,8 @@ export type PartitionedToolCalls = z.infer<typeof PartitionedToolCallsSchema>;
  * - readTools: isConcurrencySafe = true → can run in parallel
  * - writeTools: isConcurrencySafe = false → must run serially, after reads
  *
- * This is the core of Gmail safety:
- * - gmail.read + web.search + hubspot.read can all run in parallel (safe reads)
- * - gmail.send must run serially and only when no reads are in-flight
+ * Read tools (web.search, hubspot.read, etc.) run in parallel.
+ * Write tools (hubspot.write, etc.) run serially and only after reads complete.
  */
 export function partitionToolCalls(toolCalls: ToolCall[]): PartitionedToolCalls {
   const readTools: ToolCall[] = [];

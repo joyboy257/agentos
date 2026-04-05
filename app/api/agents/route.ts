@@ -7,7 +7,7 @@ export async function GET() {
   const session = await getSessionFromCookie()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const teams = await getTeamsByUser(session.user_id)
+  const teams = await getTeamsByUser(session.userId)
   return NextResponse.json({ teams })
 }
 
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   }
 
   const id = nanoid()
-  await createTeam(id, session.user_id, name, JSON.stringify(agents), JSON.stringify(connections))
+  await createTeam(id, session.userId, name, JSON.stringify(agents), JSON.stringify(connections))
 
   return NextResponse.json({ id, name, agents, connections })
 }

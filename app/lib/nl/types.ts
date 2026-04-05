@@ -42,7 +42,7 @@ export type AgentStatusEvent = {
   event: 'status'
   runId: string
   agentId: string
-  status: 'ready' | 'running' | 'waiting' | 'completed' | 'error'
+  status: 'ready' | 'running' | 'waiting' | 'completed' | 'error' | 'budget_exceeded' | 'paused_budget'
   result?: AgentOutput
   timestamp: number
 }

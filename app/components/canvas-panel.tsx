@@ -27,7 +27,7 @@ export function CanvasPanel({
   onRunError,
   onRunIdReceived,
 }: CanvasPanelProps) {
-  const [agentStatuses, setAgentStatuses] = useState<Record<string, 'ready' | 'running' | 'waiting' | 'completed' | 'error'>>({})
+  const [agentStatuses, setAgentStatuses] = useState<Record<string, 'ready' | 'running' | 'waiting' | 'completed' | 'error' | 'budget_exceeded' | 'paused_budget'>>({})
 
   // Calculate agent positions in a grid layout
   const getAgentPosition = (index: number, total: number) => {

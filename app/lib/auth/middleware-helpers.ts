@@ -9,8 +9,8 @@ import { getSessionFromCookie } from './session'
 export async function getUserId(req: Request): Promise<string> {
   // Check session cookie first — getSessionFromCookie reads from cookies() directly
   const session = await getSessionFromCookie()
-  if (session?.user_id) {
-    return session.user_id
+  if (session?.userId) {
+    return session.userId
   }
 
   // Fallback to x-user-id header for internal service-to-service calls

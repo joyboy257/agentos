@@ -38,12 +38,12 @@ interface ApprovalModalProps {
   snapshot?: ReasoningSnapshot | null
   /** Plain-English summary from the event */
   summary: string
-  /** On approve — calls PUT /api/approvals/:approvalId with { decision: 'approved' } */
-  onApprove: (approvalId: string, toolCallId: string, revisedArgs?: Record<string, unknown>) => void
-  /** On cancel — calls PUT /api/approvals/:approvalId with { decision: 'cancelled' } */
-  onCancel: (approvalId: string, toolCallId: string) => void
   /** Called when the modal is dismissed (X button or Escape) */
   onDismiss: (approvalId: string) => void
+  /** On approve — calls PUT /api/approvals/:approvalId */
+  onApprove: (approvalId: string, toolCallId: string, revisedArgs?: Record<string, unknown>) => void
+  /** On cancel — calls PUT /api/approvals/:approvalId with cancelled */
+  onCancel: (approvalId: string, toolCallId: string) => void
   /** Optional pre-filled args for edit mode */
   initialArgs?: Record<string, unknown>
 }
@@ -267,18 +267,19 @@ export function ApprovalModal({
   event,
   snapshot,
   summary,
-  onApprove,
-  onCancel,
   onDismiss,
   initialArgs,
+  onSkip,
   suggestions = [],
   onSuggestionAccept,
   onSuggestionDismiss,
 }: ApprovalModalProps & {
+  onSkip?: (approvalId: string, toolCallId: string) => Promise<void>
   suggestions?: Suggestion[]
   onSuggestionAccept?: (id: string) => Promise<void>
   onSuggestionDismiss?: (id: string) => Promise<void>
 }) {
+  const { runId } = event
   const { toolCallId, iteration, maxIterations } = event.content
   const approvalId = toolCallId // toolCallId is used as the approvalId in our design
 
@@ -295,7 +296,11 @@ export function ApprovalModal({
     if (submitting) return
     setSubmitting(true)
     try {
-      await onApprove(approvalId, toolCallId)
+      await fetch(`/api/approvals/${approvalId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId, toolCallId, decision: 'approved' }),
+      })
     } finally {
       setSubmitting(false)
     }
@@ -309,7 +314,29 @@ export function ApprovalModal({
     if (submitting) return
     setSubmitting(true)
     try {
-      await onCancel(approvalId, toolCallId)
+      await fetch(`/api/approvals/${approvalId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId, toolCallId, decision: 'cancelled' }),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSkip = async () => {
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      if (onSkip) {
+        await onSkip(approvalId, toolCallId)
+        return
+      }
+      await fetch(`/api/approvals/${approvalId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId, toolCallId, decision: 'skipped' }),
+      })
     } finally {
       setSubmitting(false)
     }
@@ -319,7 +346,11 @@ export function ApprovalModal({
     if (submitting) return
     setSubmitting(true)
     try {
-      await onApprove(approvalId, toolCallId, editedArgs)
+      await fetch(`/api/approvals/${approvalId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId, toolCallId, decision: 'edited', revisedArgs: editedArgs, reason }),
+      })
     } finally {
       setSubmitting(false)
     }
@@ -467,12 +498,26 @@ export function ApprovalModal({
           <SuggestionCard
             suggestions={suggestions}
             onAccept={async (id) => {
-              if (!onSuggestionAccept) return
-              await onSuggestionAccept(id)
+              if (onSuggestionAccept) {
+                await onSuggestionAccept(id)
+                return
+              }
+              await fetch('/api/escalation-suggestions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, action: 'accepted' }),
+              })
             }}
             onDismiss={async (id) => {
-              if (!onSuggestionDismiss) return
-              await onSuggestionDismiss(id)
+              if (onSuggestionDismiss) {
+                await onSuggestionDismiss(id)
+                return
+              }
+              await fetch('/api/escalation-suggestions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, action: 'dismissed' }),
+              })
             }}
           />
         )}
@@ -487,6 +532,13 @@ export function ApprovalModal({
                 disabled={submitting}
               >
                 Cancel
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={handleSkip}
+                disabled={submitting}
+              >
+                Skip this time only
               </button>
               <button
                 className="btn btn-secondary"

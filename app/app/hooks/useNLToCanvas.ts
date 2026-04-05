@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import { interpretGoal } from '@/lib/nl-interpret-client'
 import type { AgentGraph, Connection } from '@/lib/nl/types'
 
 // ---------------------------------------------------------------------------
@@ -112,12 +113,10 @@ export function useNLToCanvas(teamId: string) {
       }, 30_000)
 
       try {
-        const res = await fetch('/api/canvas/nl-to-canvas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ teamId, goal, existingNodes, existingEdges: [] }),
-          signal: abortControllerRef.current.signal,
-        })
+        const result = await interpretGoal(
+          { teamId, goal, existingNodes, existingEdges: [] },
+          { timeoutMs: 28_000 }
+        )
 
         clearTimeout(progressiveTimerRef.current!)
         clearTimeout(timeoutTimerRef.current!)
@@ -125,24 +124,23 @@ export function useNLToCanvas(teamId: string) {
         timeoutTimerRef.current = null
         setShowProgressive(false)
 
-        if (!res.ok) {
-          const data = await res.json()
-          setError(data.error ?? 'Something went wrong. Please try again.')
-          setState('error')
-          return
-        }
-
-        const data = await res.json()
-
-        if (data.needsClarification) {
-          setClarification({ question: data.question, options: data.options ?? [] })
+        if (result.needsClarification) {
+          setClarification({ question: result.question!, options: result.options ?? [] })
           setState('preview')
           setPreview(null)
           return
         }
 
-        if (data.error) {
-          setError(data.error)
+        if (result.error) {
+          setError(result.error)
+          setState('error')
+          return
+        }
+
+        const data = result
+
+        if (!data.graph) {
+          setError('Invalid response from interpreter')
           setState('error')
           return
         }

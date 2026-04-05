@@ -18,6 +18,7 @@ export type HookType =
   | 'postApproval'     // After approval is resolved (approved, denied, cancelled, timeout)
   | 'runComplete'      // After entire run finishes
   | 'runError'         // When run encounters a fatal error
+  | 'budgetPaused'    // When agent pauses due to budget exhaustion
 
 // ---------------------------------------------------------------------------
 // Hook Context — serializable payload passed to each hook handler
@@ -64,6 +65,10 @@ export interface HookContext {
   }
   runError?: {
     error: string
+  }
+  budgetPaused?: {
+    elapsedMs: number
+    budgetMs: number
   }
 }
 

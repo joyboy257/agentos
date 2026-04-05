@@ -2,11 +2,11 @@
  * Capability Registry — Built-in Capabilities
  * ARCHITECTURE-01-capability-registry.md §4
  *
- * 6 built-in capabilities matching PHASE1_AGENTS from agent-registry.ts.
+ * 5 built-in capabilities: llm:draft, faq:respond, escalation:triage, web:search, llm:route.
  * Each capability's agentRole uses underscore format so test-suite.ts passes.
  *
  * Available tools (matching AVAILABLE_TOOLS):
- *   gmail.read, gmail.send, llm, web.search, web.fetch
+ *   llm, web.search, web.fetch
  */
 
 import { Capability, CapabilityMatch, ExecutionContext } from './types';
@@ -18,82 +18,6 @@ import { inferInputs, hasAllRequiredInputs } from './infer-inputs';
 // ---------------------------------------------------------------------------
 
 const BUILTIN_CAPABILITIES: Capability[] = [
-  // ── email_reader ──────────────────────────────────────────────────────────
-  {
-    id: 'email:read',
-    description: 'Reads emails from your Gmail inbox',
-    triggers: [
-      'read my email',
-      'check my inbox',
-      'show recent emails',
-      'any new messages',
-      'find emails from',
-      'search my emails',
-      'what emails did I get',
-      'show me unread emails',
-      'get my emails',
-      'fetch email',
-      'pull up my inbox',
-      'check my email',
-      'read emails',
-      'follow up',
-      'follow up on emails',
-      'leads who haven\'t replied',
-      'lead follow up',
-      'haven\'t replied',
-      'not replied',
-      'no response',
-      'emails from leads',
-      'customer emails',
-      'unread emails',
-      'emails I need to follow up on',
-      'follow up with leads',
-      'follow up emails',
-    ],
-    tools: ['gmail.read'],
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Gmail search query string',
-          semanticType: 'query',
-          default: '',
-        },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of messages to return',
-          default: 10,
-        },
-      },
-      required: [],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        messages: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'Message ID', semanticType: 'emailId' },
-              threadId: { type: 'string', description: 'Thread ID', semanticType: 'threadId' },
-              from: { type: 'string', description: 'Sender email address' },
-              subject: { type: 'string' },
-              snippet: { type: 'string' },
-              body: { type: 'string' },
-              date: { type: 'string' },
-            },
-          },
-        },
-        totalCount: { type: 'number' },
-      },
-    },
-    approvalConfig: { approverType: 'none' },
-    estimatedDurationMs: 2000,
-    agentRole: 'email_reader',
-  },
-
   // ── response_drafter ──────────────────────────────────────────────────────
   {
     id: 'llm:draft',
@@ -147,143 +71,6 @@ const BUILTIN_CAPABILITIES: Capability[] = [
     approvalConfig: { approverType: 'none' },
     estimatedDurationMs: 5000,
     agentRole: 'response_drafter',
-  },
-
-  // ── email_sender ───────────────────────────────────────────────────────────
-  {
-    id: 'email:send',
-    description: 'Sends approved email drafts from your account',
-    triggers: [
-      'send an email',
-      'send email to',
-      'compose and send',
-      'email them',
-      'send a message',
-      'send the email',
-      'send my emails',
-      'help me email',
-      'email my customers',
-      'send this email',
-      'help me email my customers',
-      'send approved',
-      'approved email',
-      'draft and send',
-      'customer emails',
-      'respond to customer emails',
-    ],
-    tools: ['gmail.send'],
-    inputSchema: {
-      type: 'object',
-      properties: {
-        to: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Recipient email addresses',
-          semanticType: 'emailAddress',
-        },
-        subject: {
-          type: 'string',
-          description: 'Email subject line',
-          semanticType: 'subject',
-        },
-        body: {
-          type: 'string',
-          description: 'Email body text',
-          semanticType: 'messageBody',
-        },
-        threadId: {
-          type: 'string',
-          description: 'Thread ID to reply within',
-          semanticType: 'threadId',
-        },
-      },
-      required: ['to', 'subject', 'body'],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        messageId: { type: 'string', semanticType: 'emailId' },
-        threadId: { type: 'string', semanticType: 'threadId' },
-        sentAt: { type: 'string' },
-      },
-    },
-    approvalConfig: { approverType: 'user', timeoutSeconds: 300, fallback: 'abort' },
-    estimatedDurationMs: 3000,
-    agentRole: 'email_sender',
-  },
-
-  // ── ticket_reader ─────────────────────────────────────────────────────────
-  {
-    id: 'ticket:read',
-    description: 'Reads support tickets from your inbox',
-    triggers: [
-      'read support tickets',
-      'handle support tickets',
-      'answer customer support',
-      'support tickets',
-      'triage support tickets',
-      'ticket reader',
-      'read tickets',
-      'handle tickets',
-      'escalate urgent tickets',
-      'route support emails',
-      'escalate',
-      'escalate important',
-      'escalate complex',
-      'triage support',
-      'urgent tickets',
-      'important tickets',
-      'customer issues',
-      'complex customer issues',
-      'route emails',
-      'route to team',
-      'right team',
-      'auto-respond to common support questions',
-      'auto-respond to support',
-      'support questions',
-      'common support questions',
-      'common support',
-    ],
-    tools: ['gmail.read'],
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Filter for tickets (e.g., label:support)',
-          semanticType: 'query',
-          default: 'label:support',
-        },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of tickets to return',
-          default: 10,
-        },
-      },
-      required: [],
-    },
-    outputSchema: {
-      type: 'object',
-      properties: {
-        tickets: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'Ticket ID', semanticType: 'ticketId' },
-              subject: { type: 'string' },
-              from: { type: 'string' },
-              body: { type: 'string' },
-              priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
-            },
-          },
-        },
-        totalCount: { type: 'number' },
-      },
-    },
-    approvalConfig: { approverType: 'none' },
-    estimatedDurationMs: 2000,
-    agentRole: 'ticket_reader',
   },
 
   // ── faq_responder ─────────────────────────────────────────────────────────

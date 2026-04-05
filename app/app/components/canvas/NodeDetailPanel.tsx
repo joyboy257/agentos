@@ -1,9 +1,10 @@
 'use client'
 
-import { X, Clock, Zap, AlertTriangle, Eye, Users, Activity } from 'lucide-react'
+import { X, Clock, Zap, AlertTriangle, Eye, Users, Activity, Moon } from 'lucide-react'
 import { useCanvas, type AgentNodeData } from './CanvasProvider'
 import { ReasoningPanel } from '@/components/reasoning-panel'
 import { getActiveEscalation } from '@/lib/runtime/escalation-store'
+import { useEffect, useState } from 'react'
 
 const statusConfig: Record<AgentNodeData['status'], { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
   running: { label: 'Running', color: '#22c55e', bgColor: '#dcfce7', icon: Zap },
@@ -12,6 +13,7 @@ const statusConfig: Record<AgentNodeData['status'], { label: string; color: stri
   scheduled: { label: 'Scheduled', color: '#f59e0b', bgColor: '#fef3c7', icon: Clock },
   error: { label: 'Error', color: '#ef4444', bgColor: '#fee2e2', icon: AlertTriangle },
   waiting: { label: 'Waiting', color: '#60a5fa', bgColor: '#dbeafe', icon: Clock },
+  paused_budget: { label: 'Budget exceeded', color: '#f59e0b', bgColor: '#fef3c7', icon: Clock },
 }
 
 const archetypeColors: Record<NonNullable<AgentNodeData['archetype']>, { color: string; bgColor: string }> = {
@@ -391,6 +393,25 @@ function NodeSelectedState({
   )
 }
 
+function useOvernightSummary(userId: string | null) {
+  const [summary, setSummary] = useState<{
+    completedCount: number
+    escalatedCount: number
+    firstRunAt: string | null
+    agentsActive: string[]
+  } | null>(null)
+
+  useEffect(() => {
+    if (!userId) return
+    // TODO(wire): replace with real API call once auth is wired
+    // const { getOvernightSummary } = await import('@/lib/db/queries')
+    // setSummary(await getOvernightSummary(userId))
+    setSummary({ completedCount: 0, escalatedCount: 0, firstRunAt: null, agentsActive: [] })
+  }, [userId])
+
+  return summary
+}
+
 function TeamLeadOverview({
   onSelectNode,
 }: {
@@ -412,11 +433,45 @@ function TeamLeadOverview({
   const activeWorkers = workers.filter((w) => (w.data as AgentNodeData).status === 'running').length
   const teamLeadData = teamLead?.data as AgentNodeData | undefined
 
+  // TODO(wire): pass real userId from auth context
+  const overnight = useOvernightSummary(null)
+
   return (
     <div style={panelStyle}>
       <PanelHeader title="Your Team" onClose={() => {}} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+        {/* Morning summary banner — "worked while you slept" */}
+        {overnight && overnight.completedCount > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '12px 14px',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: 10,
+              marginBottom: 16,
+            }}
+          >
+            <Moon size={16} color="#16a34a" />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#166534' }}>
+                {overnight.completedCount} task{overnight.completedCount !== 1 ? 's' : ''} while you slept
+              </div>
+              {overnight.agentsActive.length > 0 && (
+                <div style={{ fontSize: 11, color: '#15803d', marginTop: 1 }}>
+                  {overnight.agentsActive.join(', ')}
+                </div>
+              )}
+            </div>
+            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 500 }}>
+              {overnight.firstRunAt ?? 'last night'}
+            </span>
+          </div>
+        )}
+
         {/* Team Lead card */}
         {teamLead && (
           <button

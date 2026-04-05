@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const session = await getSessionFromCookie()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const credential = await getCredential(session.user_id, 'gmail')
+  const credential = await getCredential(session.userId, 'gmail')
   if (!credential) {
     return NextResponse.json({ error: true, message: 'Gmail not connected.' }, { status: 400 })
   }

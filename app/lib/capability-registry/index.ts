@@ -48,25 +48,6 @@ export class CapabilityRegistry {
 }
 
 // Tool definition stubs (actual implementations wired in Phase 1)
-function makeGmailToolDef(
-  name: string,
-  isConcurrencySafe: boolean,
-  isDestructive: boolean,
-  permissionLevel: PermissionLevel
-): ToolDefinition {
-  return {
-    name,
-    description: `${name} tool`,
-    isConcurrencySafe,
-    isDestructive,
-    permissionLevel,
-    execute: async (args: unknown, _context: ToolContext): Promise<ToolResult> => {
-      // Placeholder — actual implementation wired in Phase 1
-      return { success: true, data: {} };
-    },
-  };
-}
-
 function makeHubspotToolDef(
   name: string,
   isConcurrencySafe: boolean,
@@ -119,48 +100,6 @@ function makeLlmToolDef(
 export const capabilityRegistry = new CapabilityRegistry();
 
 // Register built-in capabilities
-
-// gmail.read (ingest)
-capabilityRegistry.registerCapability(
-  {
-    id: 'gmail.read',
-    name: 'Gmail Read',
-    description: 'Read emails from a Gmail inbox',
-    archetype: 'ingest',
-    triggerPhrases: [
-      'read email',
-      'check inbox',
-      'get emails',
-      'fetch emails',
-      'read my mail',
-    ],
-    inputSchema: z.object({}),
-    outputSchema: z.object({}),
-    tools: ['gmail.read'],
-    permissionLevel: 'safe',
-  },
-  [
-    makeGmailToolDef('gmail.read', true, false, 'safe'),
-  ]
-);
-
-// gmail.send (process)
-capabilityRegistry.registerCapability(
-  {
-    id: 'gmail.send',
-    name: 'Gmail Send',
-    description: 'Send email via Gmail',
-    archetype: 'process',
-    triggerPhrases: ['send email', 'compose email', 'write email', 'reply to'],
-    inputSchema: z.object({}),
-    outputSchema: z.object({}),
-    tools: ['gmail.send'],
-    permissionLevel: 'needs_approval',
-  },
-  [
-    makeGmailToolDef('gmail.send', false, true, 'needs_approval'),
-  ]
-);
 
 // hubspot.leads (ingest)
 capabilityRegistry.registerCapability(
@@ -262,13 +201,13 @@ capabilityRegistry.registerCapability(
   {
     id: 'distill.notify',
     name: 'Notify',
-    description: 'Send a notification via email',
+    description: 'Send a notification to the user',
     archetype: 'distill',
     triggerPhrases: ['notify', 'alert', 'tell me', 'send me', 'report to'],
     inputSchema: z.object({}),
     outputSchema: z.object({}),
-    tools: ['gmail.send'],
-    permissionLevel: 'needs_approval',
+    tools: ['llm'],
+    permissionLevel: 'safe',
   },
-  [makeGmailToolDef('gmail.send', false, true, 'needs_approval')]
+  [makeLlmToolDef('llm', false, 'safe')]
 );

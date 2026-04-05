@@ -4,21 +4,24 @@
  * Flow: approval-manager.ts emits a preApproval hook → sendApprovalPush sends
  * Web Push to all subscribed browsers for the user whose run it is.
  *
- * VAPID keys — in production these come from environment variables.
+ * VAPID keys — must be set via environment variables.
  * Generate them with: npx web-push generate-vapid-keys
  */
 
 import webpush from 'web-push'
 import { sql } from '@vercel/postgres'
 
-export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'
-export const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? 'UUxI4O8-FbRouAevSmBQ6o18hgE4nSG3qwvJTfKc-ls'
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? 'mailto:admin@agentos.ai'
 
-webpush.setVapidDetails(
-  'mailto:admin@agentos.ai',
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY
-)
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  throw new Error('Missing VAPID keys: set NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars')
+}
+
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
+
+export { VAPID_PUBLIC_KEY }
 
 export interface PushSubscriptionRow {
   id: string
@@ -42,15 +45,19 @@ export async function sendApprovalPush(params: {
 }): Promise<void> {
   const { runId, agentId, toolName, summary, toolCallId } = params
 
-  // Look up userId from the run
+  // Look up userId and agent name from the run
   const runResult = await sql`
-    SELECT user_id FROM runs WHERE id = ${runId}
+    SELECT r.user_id, a.name
+    FROM runs r
+    JOIN agents a ON a.id = r.agent_id
+    WHERE r.id = ${runId}
   `
   if (runResult.rows.length === 0) {
     console.warn(`[push] run not found: ${runId}`)
     return
   }
   const userId = runResult.rows[0].user_id
+  const agentName = runResult.rows[0].name || 'Agent'
 
   // Fetch all active push subscriptions for this user
   const result = await sql`
@@ -62,8 +69,8 @@ export async function sendApprovalPush(params: {
   if (result.rows.length === 0) return
 
   const payload = JSON.stringify({
-    title: `Agent needs your input`,
-    body: `${agentId} wants to ${toolName}: ${summary}`,
+    title: 'Agent needs your input',
+    body: `${agentName} is waiting on: ${summary}`,
     icon: '/icon-192.png',
     badge: '/badge-72.png',
     tag: `approval-${toolCallId}`,

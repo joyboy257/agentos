@@ -18,6 +18,7 @@ export type ReasoningEventType =
   | 'status'
   | 'done'
   | 'error'
+  | 'paused_budget'
 
 export interface ReasoningEventIntegrity {
   mac: string   // HMAC-SHA256 hex digest
@@ -128,6 +129,14 @@ export interface ErrorEvent extends BaseReasoningEvent {
   }
 }
 
+export interface BudgetPausedEvent extends BaseReasoningEvent {
+  type: 'paused_budget'
+  content: {
+    elapsedMs: number
+    budgetMs: number
+  }
+}
+
 export type ReasoningEvent =
   | ObservationEvent
   | ClassificationEvent
@@ -139,6 +148,7 @@ export type ReasoningEvent =
   | StatusEvent
   | DoneEvent
   | ErrorEvent
+  | BudgetPausedEvent
 
 /**
  * Verify that an object conforms to the ReasoningEvent interface.

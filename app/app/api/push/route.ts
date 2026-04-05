@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid Pushover user key format' }, { status: 400 })
   }
 
-  await sql`UPDATE users SET pushover_user_key = ${pushoverUserKey} WHERE id = ${session.user_id}`
+  await sql`UPDATE users SET pushover_user_key = ${pushoverUserKey} WHERE id = ${session.userId}`
 
   return NextResponse.json({ success: true })
 }
@@ -38,7 +38,7 @@ export async function DELETE() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  await sql`UPDATE users SET pushover_user_key = NULL WHERE id = ${session.user_id}`
+  await sql`UPDATE users SET pushover_user_key = NULL WHERE id = ${session.userId}`
 
   return NextResponse.json({ success: true })
 }

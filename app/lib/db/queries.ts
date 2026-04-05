@@ -1,4 +1,5 @@
-import { sql } from '@vercel/postgres';
+import { ulid } from 'ulid'
+import { sql } from '@vercel/postgres'
 import type { Agent, Run, Checkpoint, Approval, WorkingMemoryEntry, Session, GmailToken, AgentStatus, RunStatus, MagicLinkToken, EncryptedCredential } from './types';
 
 // --- AGENTS ---
@@ -57,6 +58,55 @@ export async function updateRunStatus(id: string, status: RunStatus, completedAt
   } else {
     await sql`UPDATE runs SET status = ${status} WHERE id = ${id}`;
   }
+}
+
+export async function getOvernightSummary(userId: string): Promise<{
+  completedCount: number
+  escalatedCount: number
+  firstRunAt: string | null
+  agentsActive: string[]
+}> {
+  // "Overnight" = since midnight user local time
+  const today = new Date()
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+
+  const runsResult = await sql`
+    SELECT r.*, a.name as agent_name
+    FROM runs r
+    JOIN agents a ON a.id = r.agent_id
+    WHERE r.user_id = ${userId}
+      AND r.status = 'completed'
+      AND r.completed_at >= ${startOfDay}
+    ORDER BY r.completed_at ASC
+  `
+
+  const escalationsResult = await sql`
+    SELECT COUNT(*) as count
+    FROM escalation_suggestions es
+    JOIN agents a ON a.id = es.agent_id
+    WHERE a.user_id = ${userId}
+      AND es.status = 'pending'
+      AND es.created_at >= ${startOfDay}
+  `
+
+  const completedCount = runsResult.rows.length
+  const escalatedCount = Number(escalationsResult.rows[0]?.count ?? 0)
+  const agentsActive = [...new Set((runsResult.rows as Array<{ agent_name: string }>).map((r) => r.agent_name))]
+  const firstRunAt = runsResult.rows[0]?.completed_at
+    ? formatTimeAgo(new Date(runsResult.rows[0].completed_at))
+    : null
+
+  return { completedCount, escalatedCount, firstRunAt, agentsActive }
+}
+
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
 }
 
 // --- CHECKPOINTS ---
@@ -289,6 +339,47 @@ export async function getCredential(userId: string, provider: string): Promise<C
   return result.rows[0] as Credential ?? null;
 }
 
+// --- CANVAS WIRES ---
+export interface CanvasWire {
+  id: string
+  team_id: string
+  source_id: string
+  target_id: string
+  label: string | null
+  created_at: Date
+}
+
+export async function createCanvasWire(data: {
+  teamId: string
+  sourceId: string
+  targetId: string
+  label?: string | null
+}): Promise<CanvasWire> {
+  const { rows } = await sql`
+    INSERT INTO canvas_wires (id, team_id, source_id, target_id, label)
+    VALUES (
+      ${ulid()},
+      ${data.teamId},
+      ${data.sourceId},
+      ${data.targetId},
+      ${data.label ?? null}
+    )
+    RETURNING *
+  `
+  return rows[0] as CanvasWire
+}
+
+export async function listCanvasWiresForTeam(teamId: string): Promise<CanvasWire[]> {
+  const { rows } = await sql`
+    SELECT * FROM canvas_wires WHERE team_id = ${teamId} ORDER BY created_at ASC
+  `
+  return rows as CanvasWire[]
+}
+
+export async function deleteCanvasWire(id: string, teamId: string): Promise<void> {
+  await sql`DELETE FROM canvas_wires WHERE id = ${id} AND team_id = ${teamId}`
+}
+
 // --- MAGIC LINK TOKENS (legacy for magic-link.ts) ---
 // These are called by lib/auth/magic-link.ts
 
@@ -355,4 +446,145 @@ export async function getEscalationSuggestionsForRun(runId: string): Promise<Esc
     ORDER BY created_at DESC
   `
   return result.rows as EscalationSuggestion[]
+}
+
+// --- CANVASES ---
+export interface Canvas {
+  id: string
+  user_id: string
+  name: string
+  domain: string | null
+  agents_json: string
+  connections_json: string
+  is_default: boolean
+  created_at: Date
+  updated_at: Date
+}
+
+export async function createCanvas(data: {
+  id: string
+  user_id: string
+  name: string
+  domain?: string | null
+  agents_json?: unknown[]
+  connections_json?: unknown[]
+  is_default?: boolean
+}): Promise<Canvas> {
+  const result = await sql`
+    INSERT INTO canvases (id, user_id, name, domain, agents_json, connections_json, is_default)
+    VALUES (
+      ${data.id},
+      ${data.user_id},
+      ${data.name},
+      ${data.domain ?? null},
+      ${JSON.stringify(data.agents_json ?? [])},
+      ${JSON.stringify(data.connections_json ?? [])},
+      ${data.is_default ?? false}
+    )
+    RETURNING *
+  `
+  return result.rows[0] as Canvas
+}
+
+export async function getCanvas(id: string): Promise<Canvas | null> {
+  const result = await sql`SELECT * FROM canvases WHERE id = ${id}`
+  return result.rows[0] as Canvas ?? null
+}
+
+export async function listCanvasesForUser(userId: string): Promise<Canvas[]> {
+  const result = await sql`
+    SELECT * FROM canvases WHERE user_id = ${userId} ORDER BY created_at DESC
+  `
+  return result.rows as Canvas[]
+}
+
+export async function updateCanvas(
+  id: string,
+  data: {
+    name?: string
+    domain?: string | null
+    agents_json?: unknown[]
+    connections_json?: unknown[]
+    is_default?: boolean
+  }
+): Promise<Canvas> {
+  const existing = await getCanvas(id)
+  if (!existing) throw new Error(`Canvas ${id} not found`)
+
+  const result = await sql`
+    UPDATE canvases SET
+      name            = ${data.name ?? existing.name},
+      domain          = ${data.domain !== undefined ? data.domain : existing.domain},
+      agents_json     = ${data.agents_json ? JSON.stringify(data.agents_json) : existing.agents_json},
+      connections_json = ${data.connections_json ? JSON.stringify(data.connections_json) : existing.connections_json},
+      is_default      = ${data.is_default ?? existing.is_default},
+      updated_at      = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `
+  return result.rows[0] as Canvas
+}
+
+export async function deleteCanvas(id: string): Promise<void> {
+  await sql`DELETE FROM canvases WHERE id = ${id}`
+}
+
+// --- GOVERNANCE ACTIONS ---
+export interface GovernanceAction {
+  id: string
+  user_id: string
+  canvas_id: string | null
+  action_type: 'new_agent' | 'new_tool' | 'schema_change'
+  payload_json: string
+  status: 'pending' | 'approved' | 'denied'
+  resolved_at: Date | null
+  resolved_by: string | null
+  created_at: Date
+}
+
+export async function createGovernanceAction(data: {
+  id: string
+  user_id: string
+  canvas_id?: string | null
+  action_type: GovernanceAction['action_type']
+  payload_json: string
+}): Promise<GovernanceAction> {
+  const result = await sql`
+    INSERT INTO governance_actions (id, user_id, canvas_id, action_type, payload_json)
+    VALUES (${data.id}, ${data.user_id}, ${data.canvas_id ?? null}, ${data.action_type}, ${data.payload_json})
+    RETURNING *
+  `
+  return result.rows[0] as GovernanceAction
+}
+
+export async function listGovernanceActions(
+  userId: string,
+  status?: 'pending' | 'approved' | 'denied'
+): Promise<GovernanceAction[]> {
+  if (status) {
+    const result = await sql`
+      SELECT * FROM governance_actions
+      WHERE user_id = ${userId} AND status = ${status}
+      ORDER BY created_at DESC
+    `
+    return result.rows as GovernanceAction[]
+  }
+  const result = await sql`
+    SELECT * FROM governance_actions
+    WHERE user_id = ${userId}
+    ORDER BY created_at DESC
+  `
+  return result.rows as GovernanceAction[]
+}
+
+export async function resolveGovernanceAction(
+  id: string,
+  resolvedBy: string,
+  status: 'approved' | 'denied'
+): Promise<void> {
+  await sql`
+    UPDATE governance_actions
+    SET status = ${status}, resolved_at = NOW(), resolved_by = ${resolvedBy}
+    WHERE id = ${id}
+  `
 }

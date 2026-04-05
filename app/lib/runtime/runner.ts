@@ -8,6 +8,7 @@ import { requestApproval } from '@/lib/approval/approval-manager'
 import type { ResolvedApproval } from '@/lib/approval/approval-manager'
 import { getHookRegistry } from '@/lib/hooks'
 import type { HookContext } from '@/lib/hooks/types'
+import { getAgentContext } from '@/lib/memory/memory-client'
 
 // ---------------------------------------------------------------------------
 // Capability approval configuration (Unit 5)
@@ -75,6 +76,10 @@ export type RunOptions = {
   runId: string
   graph: AgentGraph
   signal?: AbortSignal
+  /** AgentOS user ID — used to retrieve memory context before the run */
+  userId?: string
+  /** Current goal/task description — used to search relevant memories */
+  agentGoal?: string
 }
 
 export interface Runner {
@@ -97,7 +102,7 @@ export class InProcessRunner implements Runner {
     callbacks: ExecutionCallbacks,
     options: RunOptions
   ): Promise<void> {
-    const { runId, graph, signal } = options
+    const { runId, graph, signal, userId, agentGoal } = options
     const startTime = Date.now()
     const hooks = getHookRegistry()
 
@@ -234,9 +239,27 @@ export class InProcessRunner implements Runner {
             faq_responder: 'You are a customer support FAQ responder. Answer common questions professionally.',
             escalation_triage: 'You are an escalation triage agent. Determine if a ticket needs human escalation.',
           }
+
+          // Inject long-term memory context if userId and goal are available
+          let memorySection = ''
+          if (userId && agentGoal) {
+            try {
+              const ctx = await getAgentContext(userId, agentGoal, 5)
+              if (ctx.facts.length > 0) {
+                const factsList = ctx.facts.map(f => `- ${f}`).join('\n')
+                memorySection = `\n\n## What Maria has told us\n${factsList}`
+                trace.emitObservation(`Injected ${ctx.count} memory facts into context`)
+              }
+            } catch (err) {
+              // Non-fatal: memory retrieval failures should not block the run
+              trace.emitWarning(`Memory context injection failed: ${String(err)}`, 'low')
+            }
+          }
+
           const upstreamOutputs = completions.get(agentId) || []
           const context = upstreamOutputs.map(o => JSON.stringify(o.data)).join('\n')
-          const system = systemPrompts[agent.role] || 'You are a helpful AI assistant.'
+          const baseSystem = systemPrompts[agent.role] || 'You are a helpful AI assistant.'
+          const system = baseSystem + memorySection
 
           const result = await executeTool(
             'llm',

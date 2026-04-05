@@ -1,11 +1,15 @@
 import type { Metadata } from 'next'
 import { useEffect } from 'react'
 import './globals.css'
+import { authClient } from '@/lib/auth-client'
 
 export const metadata: Metadata = {
   title: 'AgentOS — Canva for AI Agents',
   description: 'Visual multi-agent AI orchestration for non-technical business users',
 }
+
+// Export auth client for use throughout the app
+export { authClient }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
