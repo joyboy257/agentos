@@ -60,3 +60,14 @@ CREATE TABLE IF NOT EXISTS reasoning_traces (
 
 CREATE INDEX idx_reasoning_traces_expires ON reasoning_traces(expires_at);
 CREATE INDEX idx_reasoning_traces_run_id ON reasoning_traces(run_id);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS push_subscriptions_user_id_idx ON push_subscriptions(user_id);

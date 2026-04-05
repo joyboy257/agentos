@@ -1,100 +1,92 @@
 'use client'
 
-import { CanvasPanel } from '@/components/canvas-panel'
-import { ChatPanel } from '@/components/chat-panel'
-import { useState } from 'react'
-import { Agent, Connection } from '@/lib/nl/types'
+import { InfiniteCanvas } from '@/app/components/canvas/InfiniteCanvas'
+import { ReasoningPanel } from '@/components/reasoning-panel'
+import { PushNotificationBell } from '@/app/components/push-notification-bell'
+import { NLPromptBar } from '@/app/components/canvas/NLPromptBar'
+import { useState, useEffect } from 'react'
+import type { NLToCanvasResult } from '@/app/hooks/useNLToCanvas'
 
 export default function CanvasPage() {
-  const [assembledGraph, setAssembledGraph] = useState<{ agents: Agent[]; connections: Connection[] } | null>(null)
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'bot'; content: string }>>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [reasoningPanelOpen, setReasoningPanelOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
-  const handleGoalSubmit = (goal: string) => {
-    setMessages((prev) => [...prev, { role: 'user', content: goal }])
-    setIsLoading(true)
-
-    setTimeout(() => {
-      const botMessage = `I've assembled your agent team for: "${goal}"
-
-Based on your request, I've created a workflow with the following agents ready to work together.`
-
-      setMessages((prev) => [...prev, { role: 'bot', content: botMessage }])
-
-      // Create demo graph
-      const demoGraph: { agents: Agent[]; connections: Connection[] } = {
-        agents: [
-          { id: 'reader-1', role: 'email_reader', tools: ['gmail'], name: 'Email Reader', description: 'Reads emails from inbox' },
-          { id: 'drafter-1', role: 'response_drafter', tools: ['llm'], name: 'Response Drafter', description: 'Drafts response emails' },
-          { id: 'sender-1', role: 'llm', tools: ['gmail'], name: 'Email Sender', description: 'Sends emails' },
-        ],
-        connections: [
-          { from: 'reader-1', to: 'drafter-1' },
-          { from: 'drafter-1', to: 'sender-1' },
-        ],
+  // Cmd+K / Ctrl+K toggles the command palette
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setPaletteOpen(v => !v)
       }
-      setAssembledGraph(demoGraph)
-      setIsLoading(false)
-    }, 1500)
-  }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
-  const handleTemplateSelect = (goal: string) => {
-    handleGoalSubmit(goal)
+  // Listen for run-started to capture runId and open-reasoning-panel to show the panel
+  useEffect(() => {
+    function handleRunStarted(e: Event) {
+      setActiveRunId((e as CustomEvent<{ runId: string }>).detail.runId)
+      setReasoningPanelOpen(true)
+    }
+    function handleOpenReasoningPanel() {
+      setReasoningPanelOpen(true)
+    }
+    document.addEventListener('run-started', handleRunStarted)
+    document.addEventListener('open-reasoning-panel', handleOpenReasoningPanel)
+    return () => {
+      document.removeEventListener('run-started', handleRunStarted)
+      document.removeEventListener('open-reasoning-panel', handleOpenReasoningPanel)
+    }
+  }, [])
+
+  const handlePaletteActivate = (result: NLToCanvasResult) => {
+    // Wire the interpreted agents into the canvas via the InfiniteCanvas's hook
+    const event = new CustomEvent('nl-palette-activate', { detail: result, bubbles: true })
+    document.dispatchEvent(event)
+    setPaletteOpen(false)
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      {/* Floating chat bubble / input */}
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {/* Main React Flow canvas */}
+      <InfiniteCanvas />
+
+      {/* Top-right controls: notifications bell + reasoning panel */}
       <div
         style={{
-          position: 'fixed',
-          bottom: '24px',
-          left: '24px',
-          zIndex: 100,
-          width: '320px',
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 8,
+          width: 400,
+          maxHeight: 'calc(100vh - 100px)',
         }}
       >
-        <div
-          style={{
-            backgroundColor: 'var(--panel)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '16px',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-          }}
-        >
-          <div style={{ marginBottom: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Chat
-          </div>
-          <input
-            type="text"
-            placeholder="Describe your goal..."
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                handleGoalSubmit(e.currentTarget.value.trim())
-                e.currentTarget.value = ''
-              }
-            }}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              backgroundColor: 'var(--bg)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              color: 'var(--text-primary)',
-              fontSize: '13px',
-              outline: 'none',
-            }}
-          />
-        </div>
+        <PushNotificationBell />
+        <ReasoningPanel
+          runId={activeRunId}
+          isOpen={reasoningPanelOpen}
+          onToggle={() => setReasoningPanelOpen((v) => !v)}
+          maxHeight={600}
+        />
       </div>
 
-      {/* Full canvas */}
-      <CanvasPanel
-        assembledGraph={assembledGraph}
-        onModeToggle={() => {}}
-        mode="canvas"
-      />
+      {/* Command palette — centered overlay, toggled by Cmd+K */}
+      {paletteOpen && (
+        <NLPromptBar
+          teamId="team-1"
+          variant="command-palette"
+          onActivate={handlePaletteActivate}
+          onCancel={() => setPaletteOpen(false)}
+          onBackdropClick={() => setPaletteOpen(false)}
+        />
+      )}
     </div>
   )
 }

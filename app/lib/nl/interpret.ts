@@ -11,16 +11,31 @@ function getClient(): OpenAI {
   return _client
 }
 
-export async function interpret(goal: string, timeoutMs = 5000): Promise<InterpretResult> {
+export interface ExistingCanvas {
+  agents: Array<{ id: string; role: string; name: string; tools: string[]; description?: string }>
+  connections: Array<{ from: string; to: string }>
+}
+
+interface InterpretOptions {
+  timeoutMs?: number
+  existingCanvas?: ExistingCanvas
+}
+
+export async function interpret(
+  goal: string,
+  options: InterpretOptions = {}
+): Promise<InterpretResult> {
+  const { timeoutMs = 5000, existingCanvas } = options
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
+    const userPrompt = buildUserPrompt(goal, existingCanvas)
     const response = await getClient().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(goal) }
+        { role: 'user', content: userPrompt }
       ],
       response_format: {
         type: 'json_schema',

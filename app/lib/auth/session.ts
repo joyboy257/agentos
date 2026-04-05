@@ -18,7 +18,7 @@ export async function createSessionForUser(userId: string) {
   const sessionId = nanoid(32)
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS)
 
-  await createSession(sessionId, userId, expiresAt)
+  await createSession({ id: sessionId, user_id: userId, expiresAt })
 
   cookieStore.set(SESSION_COOKIE, sessionId, {
     httpOnly: true,

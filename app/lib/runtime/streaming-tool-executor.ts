@@ -18,7 +18,6 @@ import { withCircuitBreaker, getCircuitBreakerForTool } from '../middleware/circ
 import { withTimeout, DEFAULT_TIMEOUT_MS } from '../middleware/with-timeout'
 import { withRetry, DEFAULT_RETRY_CONFIG } from '../middleware/with-retry'
 import type { ToolContext, ToolCall } from '../capability-registry/types'
-import { gmailReadTool, gmailSendTool } from './tools/gmail'
 import { webSearchTool } from './tools/web'
 import { generateIdempotencyKey } from './idempotency'
 import { createCheckpoint } from '../db/queries'
@@ -63,8 +62,6 @@ interface AnthropicStreamEvent {
 // ---------------------------------------------------------------------------
 
 const TOOL_TIMEOUTS: Record<string, number> = {
-  'gmail.read': 30_000,
-  'gmail.send': 20_000,
   'web.search': 15_000,
   'hubspot.read': 30_000,
   'hubspot.write': 20_000,
@@ -81,14 +78,6 @@ async function dispatchTool(
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   try {
     // Direct wiring for Phase 1 tools
-    if (toolName === 'gmail.read') {
-      const result = await gmailReadTool(context.userId, args as { query?: string; maxResults?: number })
-      return result
-    }
-    if (toolName === 'gmail.send') {
-      const result = await gmailSendTool(context.userId, args as { to: string; subject: string; body: string; cc?: string })
-      return result
-    }
     if (toolName === 'web.search') {
       const result = await webSearchTool(args.query as string, (args.limit as number) ?? 10)
       return { success: true, data: result }

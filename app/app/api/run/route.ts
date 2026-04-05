@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
 
       const runner = new InProcessRunner()
 
+      // Emit run_id event so clients can subscribe to /api/runs/{runId}/events
+      send('run_started', { runId })
+
       await runner.execute(
         {
           onStatus: (e: AgentStatusEvent) => send('status', e),

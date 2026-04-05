@@ -192,7 +192,7 @@ async function testInterpretIntegration() {
   }
 
   try {
-    const result = await interpret('check my email', 10000);
+    const result = await interpret('check my email', { timeoutMs: 10000 });
     if (result.ok && 'graph' in result) {
       console.log('  PASS: interpret("check my email") → AgentGraph');
       console.log(`    agents: ${result.graph.agents.map((a) => a.role).join(', ')}`);

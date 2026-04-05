@@ -3,10 +3,7 @@ export const SYSTEM_PROMPT = `You are the AgentOS NL Interpretation Layer.
 Your job: Given a user's goal in plain English, assemble an agent team.
 
 AVAILABLE AGENTS:
-- Email Reader: reads emails from Gmail. Tools: gmail.read
-- Response Drafter: drafts personalized email responses. Tools: llm
-- Email Sender: sends approved email drafts. Tools: gmail.send
-- Ticket Reader: reads support tickets. Tools: gmail.read
+- Response Drafter: drafts personalized responses using AI. Tools: llm
 - FAQ Responder: answers common questions. Tools: llm
 - Escalation Triage: routes complex tickets to humans. Tools: llm
 - Lead Researcher: searches web for company/contact info. Tools: web.search
@@ -20,8 +17,30 @@ RULES:
 5. Maximum 5 agents in Phase 1
 6. NEVER use tools from Phase 2 (social.post, gmail.draft, etc.)`
 
-export function buildUserPrompt(goal: string): string {
-  return `Assemble an agent team for this goal: "${goal}"
+export function buildUserPrompt(
+  goal: string,
+  existingCanvas?: {
+    agents: Array<{ id: string; role: string; name: string; tools: string[]; description?: string }>
+    connections: Array<{ from: string; to: string }>
+  }
+): string {
+  let context = ''
+  if (existingCanvas && existingCanvas.agents.length > 0) {
+    const agentList = existingCanvas.agents
+      .map(
+        a =>
+          `- ${a.name} (${a.role}): tools=[${a.tools.join(', ')}]${a.description ? ` — ${a.description}` : ''}`
+      )
+      .join('\n')
+    context = `
+
+EXISTING TEAM (read-only context — do not modify unless the goal explicitly asks to):
+${agentList}
+
+NEW AGENTS YOU CREATE SHOULD NOT DUPLICATE EXISTING ONES.`
+  }
+
+  return `Assemble an agent team for this goal: "${goal}"${context}
 
 Respond with a JSON object following this exact schema:
 {

@@ -6,14 +6,14 @@ export type Connection = {
 }
 
 export type AgentRole =
-  | 'email_reader'
   | 'response_drafter'
-  | 'ticket_reader'
   | 'faq_responder'
   | 'escalation_triage'
   | 'lead_researcher'
   | 'lead_enricher'
   | 'llm'
+  | 'team_lead'
+  | 'worker'
 
 export type Agent = {
   id: AgentId

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEscalationSuggestionsForRun, resolveEscalationSuggestion } from '@/lib/db/queries'
+import { getUserId } from '@/lib/auth/middleware-helpers'
 
 export async function GET(req: NextRequest) {
-  const userId = req.headers.get('x-user-id')
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const userId = await getUserId(req)
 
   const runId = req.nextUrl.searchParams.get('runId')
   if (!runId) {
@@ -17,10 +15,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = req.headers.get('x-user-id')
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  await getUserId(req) // Auth only, userId not used in this handler
 
   let body: { id: string; action: 'accepted' | 'dismissed' }
   try {

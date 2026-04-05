@@ -17,7 +17,6 @@ export { looksLikePII, isPIIKey, sanitizeValue, redactPII, sanitizeErrorForLog }
 export { ToolCallLogger } from './logger'
 export type { ToolCallLog, ToolCallResult, LogEndInput } from './logger'
 export {
-  CircuitBreaker,
   circuitBreakers,
   createCircuitBreaker,
   circuitBreakerSuccess,
@@ -27,4 +26,4 @@ export {
   getCircuitBreakerForTool,
   getCircuitBreakerStatus,
 } from './circuit-breaker'
-export type { CircuitState, CircuitBreakerConfig } from './circuit-breaker'
+export type { CircuitState, CircuitBreakerConfig, CircuitBreaker } from './circuit-breaker'

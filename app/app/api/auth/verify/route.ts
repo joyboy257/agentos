@@ -1,35 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createSessionToken } from '@/lib/auth/session';
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyMagicLink } from '@/lib/auth/magic-link'
+import { createSessionForUser } from '@/lib/auth/session'
 
-export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get('token');
-
+export async function GET(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get('token')
   if (!token) {
-    return NextResponse.json({ error: 'Token required' }, { status: 400 });
+    return NextResponse.redirect(new URL('/login?error=no_token', req.url))
   }
 
-  // In production: validate token from DB, check expiry, delete token (single use)
-  // For prototype: accept any token and create a demo session
+  const user = await verifyMagicLink(token)
+  if (!user) {
+    return NextResponse.redirect(new URL('/login?error=invalid_or_expired', req.url))
+  }
 
-  // TODO: Validate token against stored tokens in DB
-  // const storedToken = await validateMagicLinkToken(token);
-  // if (!storedToken) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+  await createSessionForUser(user.id)
 
-  // For prototype: extract email from token or use demo
-  const userId = `demo-${token.slice(0, 8)}`; // Demo user
-
-  const sessionId = await createSessionToken(userId);
-
-  const response = NextResponse.redirect(new URL('/app', request.url));
-
-  // Set session cookie
-  response.cookies.set('session_id', sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
-    path: '/',
-  });
-
-  return response;
+  return NextResponse.redirect(new URL('/', req.url))
 }

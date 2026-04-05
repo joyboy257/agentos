@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import type { CanvasNode, AgentNodeData } from './CanvasProvider'
+import { Eye } from 'lucide-react'
 
 const statusColors: Record<AgentNodeData['status'], string> = {
   running: '#22c55e',
@@ -32,7 +33,19 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
 
   const isTeamLead = nodeData.role === 'Team Lead'
   const width = isTeamLead ? 280 : 220
-  const height = isTeamLead ? 130 : 90
+  const height = isTeamLead ? 150 : 120
+
+  const handleViewTrace = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (nodeData.runId) {
+      const event = new CustomEvent('open-reasoning-panel', {
+        detail: { runId: nodeData.runId },
+        bubbles: true,
+      })
+      document.dispatchEvent(event)
+    }
+  }
+
 
   return (
     <div
@@ -155,6 +168,60 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
             ? 'Coordinating workers'
             : 'Team is idle'}
         </div>
+      )}
+
+      {/* Escalation badge: shown when node needs human input */}
+      {nodeData.status === 'waiting' && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 8px',
+            background: '#fef3c7',
+            borderRadius: 9999,
+            fontSize: 10,
+            fontWeight: 600,
+            color: '#92400e',
+            width: 'fit-content',
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: '#f59e0b',
+              flexShrink: 0,
+              animation: 'pulse 1.5s ease-in-out infinite',
+            }}
+          />
+          Needs input
+        </div>
+      )}
+
+      {/* Footer: View Trace button */}
+      {nodeData.runId && (
+        <button
+          onClick={handleViewTrace}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '4px 8px',
+            background: 'none',
+            border: '1px solid #e5e5e3',
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 11,
+            color: '#6b6b68',
+            width: 'fit-content',
+            marginTop: 'auto',
+          }}
+        >
+          <Eye size={11} />
+          View Trace
+        </button>
       )}
 
       {/* Output handle (right) */}

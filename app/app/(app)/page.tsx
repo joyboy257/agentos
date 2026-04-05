@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { AgentGraph, AgentStatusEvent, RunDoneEvent, RunErrorEvent } from '@/lib/nl/types'
 import { RunButton } from '@/components/run-button'
 import { ApprovalModal } from '@/components/approval-modal'
@@ -36,6 +36,16 @@ export default function HomePage() {
   // ---------------------------------------------------------------------------
   // SSE stream handler — manages full run lifecycle including approvals
   // ---------------------------------------------------------------------------
+
+  // Listen for run_started events from RunButton to capture runId
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const runId = (e as CustomEvent<{ runId: string }>).detail.runId
+      setRunId(runId)
+    }
+    document.addEventListener('run-started', handler)
+    return () => document.removeEventListener('run-started', handler)
+  }, [])
 
   const handleRunStart = async (graph: AgentGraph) => {
     setAgentStatuses(new Map())

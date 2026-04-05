@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSessionFromRequest } from './lib/auth/session';
 
 // Paths that don't require authentication
 const PUBLIC_PATHS = [

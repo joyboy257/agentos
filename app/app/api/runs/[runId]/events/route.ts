@@ -11,9 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { SSEStream } from '@/lib/tracing/sse-stream'
-import { eventBufferRegistry } from '@/lib/tracing/event-buffer'
 import { sql } from '@vercel/postgres'
-import { isReasoningEvent } from '@/lib/tracing/event-schema'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -65,35 +63,9 @@ export async function GET(
     return ownership.error
   }
 
-  // Get or create the event buffer for this run
-  const buffer = eventBufferRegistry.getOrCreate(runId)
-
-  // Check if run has completed — if so, serve from persistence
-  // For now, just create the SSE stream
+  // Create SSE stream — SSEStream manages its own buffer internally via eventBufferRegistry
   const sseStream = new SSEStream(runId, { lastSequence })
-
-  const currentSequence = sseStream.getCurrentSequence()
-
-  // If the run has completed (buffer is closed), send stream_end immediately
-  // Otherwise, stream indefinitely
   const stream = sseStream.toReadableStream()
-
-  // Send initial events followed by live stream
-  const encoder = new TextEncoder()
-  const events = buffer.getEvents(lastSequence)
-
-  // Build the response with all buffered events
-  let responseText = ''
-  for (const event of events) {
-    if (isReasoningEvent(event)) {
-      responseText += `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`
-    }
-  }
-
-  // Add stream end if buffer is empty (run already complete)
-  if (events.length === 0 && currentSequence <= lastSequence) {
-    responseText += `event: stream_end\ndata: ${JSON.stringify({ finalSequence: currentSequence })}\n\n`
-  }
 
   return new Response(stream, {
     headers: {

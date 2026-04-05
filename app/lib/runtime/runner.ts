@@ -1,6 +1,5 @@
 import { AgentGraph, AgentStatusEvent, RunDoneEvent, RunErrorEvent, AgentOutput } from '@/lib/nl/types'
 import { executeTool, resetAllRetryBudgets } from '@/lib/middleware'
-import { gmailReadTool, gmailSendTool } from './tools/gmail'
 import { llmTool } from './tools/llm'
 import { webSearchTool } from './tools/web'
 import { createTraceEmitter } from '@/lib/tracing/trace-emitter'
@@ -17,7 +16,6 @@ import type { HookContext } from '@/lib/hooks/types'
 // ---------------------------------------------------------------------------
 
 const APPROVAL_REQUIRED_TOOLS = new Set<string>([
-  'gmail.send',   // Sends emails — sensitive action
   'stripe.charge', // Payments
   'stripe.refund',
   'admin.panel',  // Admin operations
@@ -34,11 +32,6 @@ function requiresApproval(toolName: string): boolean {
 
 function buildToolSummary(toolName: string, args: Record<string, unknown>): string {
   switch (toolName) {
-    case 'gmail.send': {
-      const to = Array.isArray(args.to) ? args.to : [args.to]
-      const count = to.length
-      return `Send email to ${count} recipient${count !== 1 ? 's' : ''}: ${to.slice(0, 3).join(', ')}${count > 3 ? ` and ${count - 3} more` : ''}`
-    }
     case 'stripe.charge': {
       return `Charge $${args.amount ?? 0} to customer`
     }
@@ -90,29 +83,6 @@ export interface Runner {
 
 // Signal-aware tool wrappers
 // Tools must accept optional AbortSignal for genuine in-flight cancellation
-
-async function gmailReadWithSignal(args: { query: string; userId: string }, _signal?: AbortSignal) {
-  // gmailReadTool currently doesn't accept signal — wrap it
-  // When tools are updated to accept signal, this wrapper passes it through
-  const result = await gmailReadTool(args.query, args.userId)
-  // If the tool returned an error object, throw so executeTool can handle it
-  if (result && typeof result === 'object' && 'error' in result && result.error === true) {
-    const err = new Error((result as any).message || 'Gmail read failed') as any
-    err.status = 500 // treat as server error for retry classification
-    throw err
-  }
-  return result
-}
-
-async function gmailSendWithSignal(args: { to: string; subject: string; body: string; userId: string }, _signal?: AbortSignal) {
-  const result = await gmailSendTool(args.to, args.subject, args.body, args.userId)
-  if (result && typeof result === 'object' && 'error' in result && result.error === true) {
-    const err = new Error((result as any).message || 'Gmail send failed') as any
-    err.status = 500
-    throw err
-  }
-  return result
-}
 
 async function webSearchWithSignal(args: { query: string; limit: number }, signal?: AbortSignal) {
   return await webSearchTool(args.query, args.limit)
@@ -230,117 +200,7 @@ export class InProcessRunner implements Runner {
           return
         }
 
-        if (tools.includes('gmail.read')) {
-          trace.emitAction('Reading emails', { query: 'is:unread newer_than:1d' })
-          const result = await executeTool(
-            'gmail.read',
-            { query: 'is:unread newer_than:1d', userId: 'demo' },
-            (sig) => gmailReadWithSignal({ query: 'is:unread newer_than:1d', userId: 'demo' }, sig),
-            { abortSignal: signal, retryBudgetDomain: 'gmail' }
-          )
-          void hooks.emit('postToolCall', {
-            runId,
-            agentId,
-            toolName: 'gmail.read',
-            timestamp: Date.now(),
-            postToolCall: {
-              toolName: 'gmail.read',
-              result: result.data,
-              durationMs: 0,
-            },
-          })
-          if (result.failed) {
-            output = { agentId, role: agent.role, status: 'error', data: null, error: result.llmMessage }
-          } else {
-            output = { agentId, role: agent.role, status: 'completed', data: result.data }
-          }
-          totalRetries += result.retriesAttempted
-        } else if (tools.includes('gmail.send')) {
-          // gmail.send needs the draft email from upstream fan-in data
-          const upstreamOutputs = completions.get(agentId) || []
-          const draftData = upstreamOutputs.find(o => o.data?.kind === 'draft_email')?.data
-          if (draftData) {
-            const toolName = 'gmail.send'
-            const toolArgs = { to: draftData.draft.to, subject: draftData.draft.subject, body: draftData.draft.body, userId: 'demo' }
-
-            // R5 Human-in-the-loop: check if this tool requires approval
-            if (requiresApproval(toolName)) {
-              trace.emitObservation(`Requesting approval to send email to ${draftData.draft.to}`)
-              callbacks.onStatus({
-                event: 'status',
-                runId,
-                agentId,
-                status: 'waiting',
-                timestamp: Date.now()
-              })
-
-              let approvalResult: ResolvedApproval
-              try {
-                approvalResult = await requestApproval({
-                  runId,
-                  agentId,
-                  toolName,
-                  args: toolArgs,
-                  summary: buildToolSummary(toolName, toolArgs),
-                  fields: buildApprovalFields(toolName, toolArgs),
-                })
-              } catch (err) {
-                // Approval system error — treat as skip
-                trace.emitWarning(`Approval error: ${(err as Error).message}. Skipping tool.`, 'high')
-                output = { agentId, role: agent.role, status: 'error', data: null, error: `Approval error: ${(err as Error).message}` }
-                completions.set(agentId, [output])
-                callbacks.onStatus({ event: 'status', runId, agentId, status: 'error', result: output, timestamp: Date.now() })
-                return
-              }
-
-              if (approvalResult.decision === 'cancelled' || approvalResult.decision === 'skipped' || approvalResult.decision === 'timeout') {
-                trace.emitWarning(`Approval ${approvalResult.decision}. Tool skipped.`, 'medium')
-                output = { agentId, role: agent.role, status: 'completed', data: { skipped: true, reason: approvalResult.decision, partialInputs: toolArgs } }
-                completions.set(agentId, [output])
-                callbacks.onStatus({ event: 'status', runId, agentId, status: 'completed', result: output, timestamp: Date.now() })
-                return
-              }
-
-              // approved or edited — use (possibly revised) args
-              if (approvalResult.revisedArgs) {
-                Object.assign(draftData.draft, approvalResult.revisedArgs)
-                trace.emitAction('Sending email (approved with edits)', { to: draftData.draft.to, subject: draftData.draft.subject })
-              } else {
-                trace.emitAction('Sending email (approved)', { to: draftData.draft.to, subject: draftData.draft.subject })
-              }
-            } else {
-              trace.emitAction('Sending email', { to: draftData.draft.to, subject: draftData.draft.subject })
-            }
-
-            const result = await executeTool(
-              'gmail.send',
-              { to: draftData.draft.to, subject: draftData.draft.subject, body: draftData.draft.body, userId: 'demo' },
-              (sig) => gmailSendWithSignal(draftData.draft, sig),
-              { abortSignal: signal, retryBudgetDomain: 'gmail' }
-            )
-            void hooks.emit('postToolCall', {
-              runId,
-              agentId,
-              toolName: 'gmail.send',
-              timestamp: Date.now(),
-              postToolCall: {
-                toolName: 'gmail.send',
-                result: result.data,
-                durationMs: 0,
-              },
-            })
-            if (result.failed) {
-              trace.emitWarning(`Email send failed: ${result.llmMessage}`, 'high')
-              output = { agentId, role: agent.role, status: 'error', data: null, error: result.llmMessage }
-            } else {
-              output = { agentId, role: agent.role, status: 'completed', data: result.data }
-            }
-            totalRetries += result.retriesAttempted
-          } else {
-            trace.emitWarning('No draft email found from upstream', 'medium')
-            output = { agentId, role: agent.role, status: 'error', data: null, error: 'No draft email found from upstream' }
-          }
-        } else if (tools.includes('web.search')) {
+        if (tools.includes('web.search')) {
           trace.emitAction('Searching the web', { query: 'research leads' })
           const result = await executeTool(
             'web.search',

@@ -3,7 +3,7 @@ export interface Agent {
   user_id: string;
   name: string;
   description: string | null;
-  role: 'email_agent' | 'research_agent' | 'support_agent';
+  role: 'research_agent' | 'support_agent';
   config: Record<string, unknown>;
   status: AgentStatus;
   schedule: string | null;
@@ -71,6 +71,31 @@ export interface GmailToken {
   user_id: string;
   access_token: string;
   refresh_token: string | null;
+  expires_at: Date | null;
+  created_at: Date;
+}
+
+export interface MagicLinkToken {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: Date;
+  used_at: Date | null;
+  created_at: Date;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface EncryptedCredential {
+  id: string;
+  user_id: string;
+  provider: string;
+  encrypted_token: string;
   expires_at: Date | null;
   created_at: Date;
 }

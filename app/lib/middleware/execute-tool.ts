@@ -33,8 +33,6 @@ export interface ToolResult {
 }
 
 const DEFAULT_TOOL_TIMEOUTS: Record<string, number> = {
-  'gmail.read': 30_000,
-  'gmail.send': 20_000,
   'web.search': 15_000,
   'llm': 120_000,
 }
@@ -86,7 +84,7 @@ export async function executeTool<T>(
 
       result = await withTimeout(
         toolName,
-        () => withCircuitBreaker(() => toolFn(currentController.signal), breaker),
+        withCircuitBreaker(() => toolFn(currentController!.signal), breaker),
         timeoutMs,
         currentController.signal
       )

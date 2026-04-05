@@ -1,5 +1,5 @@
 import { sql } from '@vercel/postgres';
-import type { Agent, Run, Checkpoint, Approval, WorkingMemoryEntry, Session, GmailToken, AgentStatus, RunStatus } from './types';
+import type { Agent, Run, Checkpoint, Approval, WorkingMemoryEntry, Session, GmailToken, AgentStatus, RunStatus, MagicLinkToken, EncryptedCredential } from './types';
 
 // --- AGENTS ---
 export async function createAgent(data: {
@@ -186,6 +186,111 @@ export async function getSession(id: string): Promise<Session | null> {
 export async function deleteSession(id: string): Promise<void> {
   await sql`DELETE FROM sessions WHERE id = ${id}`;
 }
+
+// --- TEAMS (from orgs migration) ---
+export interface Team {
+  id: string;
+  owner_id: string;
+  name: string;
+  created_at: Date;
+}
+
+export async function getTeamsByUser(userId: string): Promise<Team[]> {
+  const result = await sql`
+    SELECT * FROM orgs WHERE owner_id = ${userId} ORDER BY created_at DESC
+  `;
+  return result.rows as Team[];
+}
+
+export async function createTeam(
+  id: string,
+  ownerId: string,
+  name: string,
+  agents?: string,
+  connections?: string
+) {
+  const result = await sql`
+    INSERT INTO orgs (id, owner_id, name)
+    VALUES (${id}, ${ownerId}, ${name})
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+// --- USERS ---
+export async function getUserByEmail(email: string) {
+  const result = await sql`SELECT * FROM users WHERE email = ${email}`;
+  return result.rows[0] ?? null;
+}
+
+export async function createUser(id: string, email: string) {
+  const result = await sql`
+    INSERT INTO users (id, email)
+    VALUES (${id}, ${email})
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+// --- MAGIC LINK TOKENS ---
+export async function createMagicLinkToken(tokenHash: string, userId: string, expiresAt: Date) {
+  const id = crypto.randomUUID()
+  const result = await sql`
+    INSERT INTO magic_link_tokens (id, user_id, token_hash, expires_at)
+    VALUES (${id}, ${userId}, ${tokenHash}, ${expiresAt.toISOString()})
+    RETURNING *
+  `;
+  return result.rows[0];
+}
+
+export async function getMagicLinkToken(tokenHash: string) {
+  const result = await sql`
+    SELECT * FROM magic_link_tokens
+    WHERE token_hash = ${tokenHash} AND expires_at > NOW() AND used_at IS NULL
+    ORDER BY created_at DESC LIMIT 1
+  `;
+  return result.rows[0] ?? null;
+}
+
+export async function markMagicLinkUsed(tokenHash: string) {
+  await sql`UPDATE magic_link_tokens SET used_at = NOW() WHERE token_hash = ${tokenHash}`;
+}
+
+// --- CREDENTIALS (generic encrypted token storage) ---
+export interface Credential {
+  id: string;
+  user_id: string;
+  provider: string;
+  encrypted_token: string;
+  expires_at: Date | null;
+  created_at: Date;
+}
+
+export async function saveCredential(
+  id: string,
+  userId: string,
+  provider: string,
+  encryptedToken: string,
+  expiresAt: Date | null
+) {
+  await sql`
+    INSERT INTO credentials (id, user_id, provider, encrypted_token, expires_at)
+    VALUES (${id}, ${userId}, ${provider}, ${encryptedToken}, ${expiresAt?.toISOString() ?? null})
+    ON CONFLICT (user_id, provider) DO UPDATE SET
+      encrypted_token = EXCLUDED.encrypted_token,
+      expires_at = EXCLUDED.expires_at
+  `;
+}
+
+export async function getCredential(userId: string, provider: string): Promise<Credential | null> {
+  const result = await sql`
+    SELECT * FROM credentials WHERE user_id = ${userId} AND provider = ${provider}
+  `;
+  return result.rows[0] as Credential ?? null;
+}
+
+// --- MAGIC LINK TOKENS (legacy for magic-link.ts) ---
+// These are called by lib/auth/magic-link.ts
 
 // --- GMAIL TOKENS ---
 export async function setGmailToken(data: {
