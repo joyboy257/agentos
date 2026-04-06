@@ -52,6 +52,11 @@ export async function getRun(id: string): Promise<Run | null> {
   return result.rows[0] as Run ?? null;
 }
 
+export async function getRunsByAgent(agentId: string): Promise<Run[]> {
+  const result = await sql`SELECT * FROM runs WHERE agent_id = ${agentId} ORDER BY created_at DESC LIMIT 10`;
+  return result.rows as Run[];
+}
+
 export async function updateRunStatus(id: string, status: RunStatus, completedAt?: Date): Promise<void> {
   if (completedAt) {
     await sql`UPDATE runs SET status = ${status}, completed_at = ${completedAt.toISOString()} WHERE id = ${id}`;

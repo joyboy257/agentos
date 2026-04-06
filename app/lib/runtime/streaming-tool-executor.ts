@@ -136,6 +136,7 @@ export interface StreamingExecutorOptions {
   tools: string[]  // capability IDs or tool names
   maxTokens?: number
   model?: string
+  systemPrompt?: string  // injected at call time (e.g. memory context)
   budgetMs?: number | null
   elapsedMs?: number
   onEvent?: (event: ReasoningEvent) => void
@@ -174,6 +175,7 @@ export async function streamingToolExecutor(
     tools,
     maxTokens = 4096,
     model = 'claude-sonnet-4-20250514',
+    systemPrompt,
     budgetMs,
     elapsedMs: initialElapsedMs = 0,
     onEvent,
@@ -248,6 +250,7 @@ export async function streamingToolExecutor(
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
+        system: systemPrompt,
         messages: inputMessages,
         tools: toolDefs.length > 0 ? toolDefs : undefined,
         stream: true,

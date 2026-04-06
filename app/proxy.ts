@@ -9,7 +9,7 @@ const PUBLIC_PATHS = [
   '/api/health',
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Skip auth for public paths

@@ -10,6 +10,7 @@ export interface ExecuteOptions {
   userId: string;
   sessionId: string;
   args?: Record<string, unknown>;
+  elapsedMs?: number;
 }
 
 export interface Runner {

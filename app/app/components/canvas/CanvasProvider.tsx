@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { useNodesState, useEdgesState } from '@xyflow/react'
 import type { Node, Edge } from '@xyflow/react'
 import { ulid } from 'ulid'
@@ -45,6 +45,9 @@ interface CanvasContextValue {
     position_x: number
     position_y: number
   }>, connections: Array<{ source: string; target: string }>) => void
+  loadCanvas: (canvasId: string) => Promise<void>
+  currentCanvasId: string | null
+  canvasLoading: boolean
 }
 
 const CanvasContext = createContext<CanvasContextValue | null>(null)
@@ -148,13 +151,123 @@ const initialEdges: Edge[] = [
   },
 ]
 
-export function CanvasProvider({ children }: { children: ReactNode }) {
-  const [nodes, setNodes] = useNodesState(initialNodes)
+export function CanvasProvider({ children, canvasId }: { children: ReactNode; canvasId?: string | null }) {
+  const [nodes, setNodes] = useNodesState<CanvasNode>([])
   const [edges, setEdges] = useEdgesState(initialEdges)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [activeEscalationId, setActiveEscalationId] = useState<string | null>(null)
+  const [currentCanvasId, setCurrentCanvasId] = useState<string | null>(canvasId ?? null)
+  const [canvasLoading, setCanvasLoading] = useState(false)
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null
+
+  const loadCanvas = async (id: string) => {
+    setCanvasLoading(true)
+    setCurrentCanvasId(id)
+    try {
+      const res = await fetch(`/api/canvases/${id}`)
+      if (!res.ok) throw new Error('Failed to load canvas')
+      const data = await res.json()
+      const canvas = data.canvas
+
+      // Parse agents from DB format to CanvasNode format
+      let agents: Array<{
+        id: string
+        name: string
+        role: string
+        archetype?: 'Ingest' | 'Process' | 'Distill'
+        tools: string[]
+        description?: string
+        position_x: number
+        position_y: number
+      }> = []
+      let connections: Array<{ source: string; target: string }> = []
+
+      if (canvas?.agents_json) {
+        try {
+          agents = JSON.parse(canvas.agents_json)
+        } catch {}
+      }
+      if (canvas?.connections_json) {
+        try {
+          connections = JSON.parse(canvas.connections_json)
+        } catch {}
+      }
+
+      // Convert agents to CanvasNode format
+      const loadedNodes: CanvasNode[] = agents.map((agent) => ({
+        id: agent.id,
+        type: 'agent',
+        position: { x: agent.position_x ?? 0, y: agent.position_y ?? 0 },
+        data: {
+          name: agent.name,
+          role: agent.role === 'Team Lead' ? 'Team Lead' as const : 'Worker' as const,
+          archetype: agent.archetype,
+          status: 'idle' as NodeStatus,
+          tools: agent.tools ?? [],
+          runCountToday: 0,
+          escalatedCountToday: 0,
+          lastRunAt: null,
+          nextWakeAt: null,
+          budgetUsedPercent: 0,
+        },
+      }))
+
+      // Convert connections to Edge format
+      const loadedEdges: Edge[] = connections.map((conn, i) => ({
+        id: `canvas-edge-${i}`,
+        source: conn.source,
+        target: conn.target,
+        type: 'labeled',
+        data: { label: 'feeds' },
+      }))
+
+      // Seed a Team Lead if canvas has agents but no team lead
+      const hasTeamLead = loadedNodes.some(n => n.data.role === 'Team Lead')
+      if (loadedNodes.length > 0 && !hasTeamLead) {
+        loadedNodes.unshift({
+          id: 'team-lead-1',
+          type: 'agent',
+          position: { x: 400, y: 100 },
+          data: {
+            name: `${canvas?.name ?? 'Team'} Lead`,
+            role: 'Team Lead',
+            status: 'idle',
+            workerCount: loadedNodes.length,
+            nextWakeAt: null,
+            budgetUsedPercent: 0,
+          },
+        })
+        loadedEdges.unshift({
+          id: 'team-lead-seed',
+          source: 'team-lead-1',
+          target: loadedNodes[1]?.id ?? '',
+          type: 'labeled',
+          data: { label: 'triggers' },
+        })
+      }
+
+      setNodes(loadedNodes)
+      setEdges(loadedEdges)
+      setSelectedNodeId(null)
+    } catch (err) {
+      console.error('[CanvasProvider] loadCanvas error:', err)
+    } finally {
+      setCanvasLoading(false)
+    }
+  }
+
+  // Load canvas when canvasId prop changes
+  useEffect(() => {
+    if (canvasId) {
+      loadCanvas(canvasId)
+    } else {
+      setNodes([])
+      setEdges([])
+      setCurrentCanvasId(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasId])
 
   const addGraphAgents = (
     agents: Array<{
@@ -221,6 +334,9 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         activeEscalationId,
         setActiveEscalationId,
         addGraphAgents,
+        loadCanvas,
+        currentCanvasId,
+        canvasLoading,
       }}
     >
       {children}

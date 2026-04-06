@@ -26,6 +26,7 @@ import { WorkingMemory } from './working-memory'
 import { capabilityRegistry } from '../capability-registry'
 import { streamingToolExecutor, type ReasoningEvent } from './streaming-tool-executor'
 import { postRunReflection } from './post-run-reflection'
+import { getAgentContext } from '../memory/memory-client'
 import type { ToolContext } from '../capability-registry/types'
 
 // ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ export class DurableRunner implements Runner {
   private workingMemory: WorkingMemory | null = null
 
   async execute(options: ExecuteOptions): Promise<RunResult> {
-    const { agentId, userId, sessionId, args = {} } = options
+    const { agentId, userId, sessionId, args = {}, elapsedMs = 0 } = options
 
     // 1. Create runs row
     const run = await createRun({ agent_id: agentId, user_id: userId })
@@ -110,7 +111,7 @@ export class DurableRunner implements Runner {
           running.add(agentIdToRun)
 
           // Start execution of this agent (non-blocking for fan-out)
-          this.executeAgent(agentIdToRun, run.id, sessionId, args, completions, running, queue, step).catch((err) => {
+          this.executeAgent(agentIdToRun, run.id, sessionId, args, completions, running, queue, step, elapsedMs).catch((err) => {
             console.error(`Agent ${agentIdToRun} failed:`, err)
             running.delete(agentIdToRun)
           })
@@ -181,7 +182,9 @@ export class DurableRunner implements Runner {
     }
 
     // Reconstruct state from checkpoint
-    const { agentId, messages } = resumeFrom.state_before as { agentId: string; messages: unknown[] }
+    const resumeState = resumeFrom.state_before as { agentId: string; messages: unknown[]; elapsedMs?: number }
+    const { agentId, messages } = resumeState
+    const storedElapsedMs = resumeState.elapsedMs ?? 0
 
     // Load agent
     const agent = await getAgent(agentId)
@@ -194,6 +197,7 @@ export class DurableRunner implements Runner {
       userId: run.user_id,
       sessionId: run.session_id ?? 'resume',
       args: { resumeFromCheckpoint: true, initialMessages: messages },
+      elapsedMs: storedElapsedMs,
     })
 
     return result
@@ -207,7 +211,8 @@ export class DurableRunner implements Runner {
     completions: Map<string, unknown>,
     running: Set<string>,
     queue: string[],
-    stepOffset: number
+    stepOffset: number,
+    elapsedMs: number = 0
   ): Promise<void> {
     let step = stepOffset
 
@@ -233,6 +238,22 @@ export class DurableRunner implements Runner {
       content: typeof args.prompt === 'string' ? args.prompt : JSON.stringify(args),
     }
 
+    // Fetch memory context for this user — injected into system prompt.
+    // Non-blocking: if it fails, we log and continue without memory.
+    let memorySystemPrompt: string | undefined
+    const memoryUserId = args?.userId as string ?? agent.user_id
+    const memoryGoal = typeof args.prompt === 'string' ? args.prompt : JSON.stringify(args)
+    if (memoryUserId) {
+      const memoryResult = await getAgentContext(memoryUserId, memoryGoal, 5).catch(err => {
+        console.warn('[Memory] getAgentContext failed:', err)
+        return null
+      })
+      if (memoryResult && memoryResult.facts.length > 0) {
+        memorySystemPrompt = `Known facts about this user:\n${memoryResult.facts.map((f: string) => `- ${f}`).join('\n')}`
+        console.debug(`[Memory] Injected ${memoryResult.facts.length} facts for user ${memoryUserId}`)
+      }
+    }
+
     // Convert saved messages to the format expected by streamingToolExecutor
     const allMessages = [
       ...savedMessages.map(m => ({
@@ -247,7 +268,7 @@ export class DurableRunner implements Runner {
     await createCheckpoint({
       run_id: runId,
       step,
-      state_before: { agentId, messages: allMessages },
+      state_before: { agentId, messages: allMessages, elapsedMs },
       tool_call_id: startIdempotencyKey,
     })
 
@@ -269,7 +290,6 @@ export class DurableRunner implements Runner {
     let finalStopReason = ''
     let agentStatus: 'completed' | 'error' = 'completed'
     let resultMessages: unknown[] = []
-    let elapsedMs = 0
 
     // Budget enforcement callback — called when budget is exhausted
     const onBudgetExceeded = async (elapsed: number, budgetMs: number) => {
@@ -294,6 +314,7 @@ export class DurableRunner implements Runner {
         messages: allMessages,
         tools: agentTools,
         maxTokens: 4096,
+        systemPrompt: memorySystemPrompt,
         budgetMs: agent.budget_ms,
         elapsedMs,
         onEvent,
@@ -313,7 +334,15 @@ export class DurableRunner implements Runner {
       }
 
       // Handle budget exceeded — agent is already paused via onBudgetExceeded callback
+      // Create checkpoint to store elapsedMs for resume
       if (finalStopReason === 'budget_exceeded') {
+        await createCheckpoint({
+          run_id: runId,
+          step,
+          state_after: { agentId, messages: resultMessages, budgetExceeded: true, stopReason: 'budget_exceeded', elapsedMs },
+          tool_result: { budgetExceeded: true, elapsedMs },
+          tool_call_id: generateIdempotencyKey(),
+        })
         running.delete(agentId)
         return
       }

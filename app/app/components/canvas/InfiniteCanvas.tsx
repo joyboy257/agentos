@@ -328,9 +328,9 @@ function CanvasContent() {
   )
 }
 
-export function InfiniteCanvas() {
+export function InfiniteCanvas({ canvasId }: { canvasId?: string | null }) {
   return (
-    <CanvasProvider>
+    <CanvasProvider canvasId={canvasId}>
       <CanvasContent />
     </CanvasProvider>
   )

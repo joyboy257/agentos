@@ -172,6 +172,7 @@ function NodeSelectedState({
   const status = statusConfig[data.status] ?? statusConfig.idle
   const StatusIcon = status.icon
   const hasTrace = !!data.runId
+  const [resuming, setResuming] = useState(false)
 
   return (
     <div style={panelStyle}>
@@ -341,14 +342,48 @@ function NodeSelectedState({
         )}
       </div>
 
-      {/* Footer — View Trace */}
+      {/* Footer — View Trace / Resume */}
       <div
         style={{
           padding: '16px 20px',
           borderTop: '1px solid #e5e5e3',
         }}
       >
-        {hasTrace ? (
+        {data.status === 'paused_budget' ? (
+          <button
+            onClick={async () => {
+              setResuming(true)
+              try {
+                const res = await fetch(`/api/agents/${node.id}/resume`, { method: 'POST' })
+                if (res.ok) {
+                  window.location.reload()
+                }
+              } catch (err) {
+                console.error('Failed to resume agent:', err)
+              } finally {
+                setResuming(false)
+              }
+            }}
+            disabled={resuming}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              padding: '12px 20px',
+              background: resuming ? '#d97706' : '#f59e0b',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: resuming ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {resuming ? 'Resuming...' : 'Resume Agent'}
+          </button>
+        ) : hasTrace ? (
           <button
             onClick={() => {
               const event = new CustomEvent('open-reasoning-panel', {

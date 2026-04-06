@@ -1,388 +1,324 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Check, X, Clock, Plus, AlertTriangle } from 'lucide-react'
+import { Clock, AlertTriangle } from 'lucide-react'
+import { GovernanceActionCard, type GovernanceActionData } from '@/app/components/governance-action-card'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+type ActionStatus = 'pending' | 'approved' | 'denied'
 
-interface GovernanceAction {
-  id: string
-  user_id: string
-  canvas_id: string | null
-  action_type: 'new_agent' | 'new_tool' | 'schema_change'
-  payload_json: string
-  status: 'pending' | 'approved' | 'denied'
-  resolved_at: string | null
-  resolved_by: string | null
-  created_at: string
+interface GovernanceSection {
+  status: ActionStatus
+  label: string
+  actions: GovernanceActionData[]
+  loading: boolean
+  error: string | null
 }
 
-interface GovernanceActionCardProps {
-  action: GovernanceAction
-  onResolve: (actionId: string, status: 'approved' | 'denied') => Promise<void>
-}
+const SECTIONS: { status: ActionStatus; label: string }[] = [
+  { status: 'pending', label: 'Pending Review' },
+  { status: 'approved', label: 'Approved' },
+  { status: 'denied', label: 'Denied' },
+]
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function parsePayload(actionType: GovernanceAction['action_type'], payloadJson: string): {
-  summary: string
-  details: string[]
-} {
-  let payload: Record<string, unknown>
-  try {
-    payload = JSON.parse(payloadJson)
-  } catch {
-    return { summary: 'Unknown change', details: ['Could not parse payload'] }
-  }
-
-  if (actionType === 'new_agent') {
-    const agentName = (payload.name as string) ?? 'Unnamed agent'
-    const tools = (payload.tools as string[]) ?? []
-    const risk = tools.includes('gmail.send') ? 'MEDIUM' : 'LOW'
-    return {
-      summary: `New agent: ${agentName}`,
-      details: [
-        `Role: ${(payload.role as string) ?? 'worker'}`,
-        `Tools: ${tools.join(', ') || 'none'}`,
-        `Risk level: ${risk}`,
-      ],
-    }
-  }
-
-  if (actionType === 'new_tool') {
-    const toolName = (payload.tool_name as string) ?? 'Unknown tool'
-    return {
-      summary: `New tool: ${toolName}`,
-      details: [
-        `Description: ${(payload.description as string) ?? 'No description'}`,
-        `Permission level: ${(payload.permission_level as string) ?? 'needs_approval'}`,
-      ],
-    }
-  }
-
-  if (actionType === 'schema_change') {
-    return {
-      summary: `Schema change: ${(payload.table as string) ?? 'unknown table'}`,
-      details: [
-        `Change type: ${(payload.change_type as string) ?? 'unknown'}`,
-        `Column: ${(payload.column as string) ?? 'unknown'}`,
-      ],
-    }
-  }
-
-  return { summary: 'Unknown change', details: [] }
-}
-
-function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (seconds < 60) return 'just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
-}
-
-// ---------------------------------------------------------------------------
-// GovernanceActionCard
-// ---------------------------------------------------------------------------
-
-function GovernanceActionCard({ action, onResolve }: GovernanceActionCardProps) {
-  const [loading, setLoading] = useState<'approved' | 'denied' | null>(null)
-  const { summary, details } = parsePayload(action.action_type, action.payload_json)
-
-  const handleResolve = async (status: 'approved' | 'denied') => {
-    if (loading) return
-    setLoading(status)
-    try {
-      await onResolve(action.id, status)
-    } finally {
-      setLoading(null)
-    }
-  }
-
-  const isResolved = action.status !== 'pending'
-
+function EmptyState({ message }: { message: string }) {
   return (
     <div
       style={{
-        background: '#fff',
-        border: `1px solid ${action.status === 'pending' ? '#e5e7eb' : action.status === 'approved' ? '#059669' : '#ef4444'}`,
-        borderRadius: 10,
-        padding: '16px 20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        opacity: isResolved ? 0.7 : 1,
+        textAlign: 'center',
+        padding: '40px 24px',
+        background: '#f9fafb',
+        borderRadius: 12,
+        border: '2px dashed #e5e7eb',
       }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div
+      <AlertTriangle size={28} style={{ color: '#d1d5db', margin: '0 auto 10px' }} />
+      <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+        {message}
+      </p>
+    </div>
+  )
+}
+
+function SectionHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1a1a18' }}>{label}</h2>
+      {count > 0 && (
+        <span
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            background: action.action_type === 'new_agent' ? '#ede9fe' : action.action_type === 'new_tool' ? '#fef3c7' : '#fee2e2',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#6b6b68',
+            background: '#e5e5e3',
+            borderRadius: 999,
+            padding: '1px 8px',
           }}
         >
-          <Plus size={16} style={{ color: '#6b7280' }} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#111827' }}>
-            {summary}
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
-            {action.action_type === 'new_agent' ? 'New Agent' : action.action_type === 'new_tool' ? 'New Tool' : 'Schema Change'} &middot; {timeAgo(action.created_at)}
-          </p>
-        </div>
-        {isResolved && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              padding: '2px 8px',
-              borderRadius: 99,
-              background: action.status === 'approved' ? '#d1fae5' : '#fee2e2',
-              color: action.status === 'approved' ? '#065f46' : '#991b1b',
-            }}
-          >
-            {action.status}
-          </span>
-        )}
-      </div>
-
-      {/* Details */}
-      {details.length > 0 && (
-        <ul
-          style={{
-            margin: 0,
-            padding: '0 0 0 46px',
-            listStyle: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-          }}
-        >
-          {details.map((d, i) => (
-            <li key={i} style={{ fontSize: 13, color: '#374151', display: 'flex', gap: 6 }}>
-              <span style={{ color: '#9ca3af' }}>&bull;</span>
-              {d}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Payload raw (collapsible) */}
-      <details
-        style={{ fontSize: 12, color: '#9ca3af', cursor: 'pointer' }}
-      >
-        <summary style={{ cursor: 'pointer', userSelect: 'none' }}>View raw payload</summary>
-        <pre
-          style={{
-            marginTop: 6,
-            padding: 8,
-            background: '#f9fafb',
-            borderRadius: 6,
-            fontSize: 11,
-            overflow: 'auto',
-            maxHeight: 120,
-          }}
-        >
-          {action.payload_json}
-        </pre>
-      </details>
-
-      {/* Actions */}
-      {action.status === 'pending' && (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
-          <button
-            onClick={() => handleResolve('denied')}
-            disabled={loading !== null}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 14px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              border: '1px solid #ef4444',
-              background: '#fff',
-              color: '#dc2626',
-              opacity: loading === 'denied' ? 0.5 : 1,
-            }}
-          >
-            <X size={14} />
-            Deny
-          </button>
-          <button
-            onClick={() => handleResolve('approved')}
-            disabled={loading !== null}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 14px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              border: '1px solid #059669',
-              background: '#059669',
-              color: '#fff',
-              opacity: loading === 'approved' ? 0.5 : 1,
-            }}
-          >
-            <Check size={14} />
-            Approve
-          </button>
-        </div>
+          {count}
+        </span>
       )}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
 export default function GovernancePage() {
-  const [actions, setActions] = useState<GovernanceAction[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchActions = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/governance?status=pending')
-      if (!res.ok) throw new Error('Failed to load')
-      const data = await res.json()
-      setActions(data.actions ?? [])
-    } catch (err) {
-      setError('Failed to load governance actions')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const [sections, setSections] = useState<Record<ActionStatus, GovernanceSection>>({
+    pending: { status: 'pending', label: 'Pending Review', actions: [], loading: false, error: null },
+    approved: { status: 'approved', label: 'Approved', actions: [], loading: false, error: null },
+    denied: { status: 'denied', label: 'Denied', actions: [], loading: false, error: null },
+  })
+  const [activeTab, setActiveTab] = useState<ActionStatus>('pending')
+  const [initialLoad, setInitialLoad] = useState(true)
 
   useEffect(() => {
-    void fetchActions()
-  }, [fetchActions])
+    fetchAllSections()
+  }, [])
 
-  const handleResolve = async (actionId: string, status: 'approved' | 'denied') => {
-    const res = await fetch(`/api/governance/${actionId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    if (!res.ok) throw new Error('Failed to resolve')
-    await fetchActions()
+  async function fetchAllSections() {
+    setInitialLoad(true)
+    await Promise.allSettled([
+      fetchSection('pending'),
+      fetchSection('approved'),
+      fetchSection('denied'),
+    ])
+    setInitialLoad(false)
   }
 
-  const pendingCount = actions.filter(a => a.status === 'pending').length
+  async function fetchSection(status: ActionStatus) {
+    setSections(prev => ({
+      ...prev,
+      [status]: { ...prev[status], loading: true, error: null },
+    }))
+
+    try {
+      const res = await fetch(`/api/governance?status=${status}`)
+      if (!res.ok) throw new Error('Failed to fetch')
+      const data = await res.json()
+      setSections(prev => ({
+        ...prev,
+        [status]: { ...prev[status], actions: data.actions ?? [], loading: false },
+      }))
+    } catch {
+      setSections(prev => ({
+        ...prev,
+        [status]: { ...prev[status], error: 'Failed to load', loading: false },
+      }))
+    }
+  }
+
+  const handleResolve = useCallback(
+    async (actionId: string, status: 'approved' | 'denied') => {
+      const res = await fetch(`/api/governance/${actionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error('Failed to resolve')
+      // Move action to the resolved section optimistically
+      setSections(prev => {
+        const source = status === 'approved' ? prev.pending : prev.pending
+        const target = status === 'approved' ? 'approved' : 'denied'
+        const action = source.actions.find(a => a.id === actionId)
+        if (!action) return prev
+        const resolved = { ...action, status, resolved_at: new Date().toISOString() }
+        return {
+          ...prev,
+          pending: { ...prev.pending, actions: prev.pending.actions.filter(a => a.id !== actionId) },
+          [target]: { ...prev[target], actions: [resolved, ...prev[target].actions] },
+        }
+      })
+    },
+    []
+  )
+
+  const currentSection = sections[activeTab]
+  const pendingCount = sections.pending.actions.length
 
   return (
-    <div style={{ padding: '32px 24px', maxWidth: 720, margin: '0 auto' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        background: '#f0f0ec',
+        fontFamily: 'system-ui, sans-serif',
+      }}
+    >
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#111827' }}>
-          Governance Board
-        </h1>
-        <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>
-          Review and approve structural changes to your agent team before they are activated.
-        </p>
+      <div
+        style={{
+          padding: '24px 32px 16px',
+          borderBottom: '1px solid #e5e5e3',
+          background: '#ffffff',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a1a18' }}>
+              Governance Board
+            </h1>
+            <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b6b68' }}>
+              Review and approve structural changes to your agent team
+            </p>
+          </div>
+          {pendingCount > 0 && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 12px',
+                borderRadius: 99,
+                background: '#fef3c7',
+                border: '1px solid #f59e0b',
+              }}
+            >
+              <Clock size={13} style={{ color: '#92400e' }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+                {pendingCount} pending {pendingCount === 1 ? 'change' : 'changes'}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Pending count badge */}
-      {pendingCount > 0 && (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 12px',
-            borderRadius: 99,
-            background: '#fef3c7',
-            border: '1px solid #f59e0b',
-            marginBottom: 20,
-          }}
-        >
-          <Clock size={13} style={{ color: '#92400e' }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>
-            {pendingCount} pending {pendingCount === 1 ? 'change' : 'changes'} waiting for review
-          </span>
-        </div>
-      )}
+      {/* Tab bar */}
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid #e5e5e3',
+          background: '#ffffff',
+          padding: '0 32px',
+        }}
+      >
+        {SECTIONS.map(({ status, label }) => {
+          const count = sections[status].actions.length
+          return (
+            <button
+              key={status}
+              onClick={() => setActiveTab(status)}
+              style={{
+                padding: '10px 20px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 500,
+                background: activeTab === status ? '#ffffff' : 'transparent',
+                color: activeTab === status ? '#1a1a18' : '#6b6b68',
+                borderBottom:
+                  activeTab === status ? '2px solid #6366f1' : '2px solid transparent',
+              }}
+            >
+              {label}
+              {count > 0 && (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    background: status === 'pending' ? '#6366f1' : '#e5e5e3',
+                    color: status === 'pending' ? '#fff' : '#6b6b68',
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '1px 7px',
+                  }}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
 
-      {/* Loading */}
-      {loading && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af', fontSize: 14 }}>
-          Loading...
-        </div>
-      )}
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+        {currentSection.loading && initialLoad ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <SkeletonCard /><SkeletonCard /><SkeletonCard />
+          </div>
+        ) : currentSection.error ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: 200,
+              gap: 8,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 14, color: '#dc2626' }}>{currentSection.error}</p>
+            <button
+              onClick={() => fetchSection(activeTab)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 8,
+                border: '1px solid #e5e5e3',
+                background: '#ffffff',
+                fontSize: 13,
+                cursor: 'pointer',
+                color: '#1a1a18',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : currentSection.actions.length === 0 ? (
+          <EmptyState
+            message={
+              activeTab === 'pending'
+                ? 'No pending changes. New agents and tools will appear here for review.'
+                : activeTab === 'approved'
+                ? 'No approved changes yet.'
+                : 'No denied changes.'
+            }
+          />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {currentSection.actions.map(action => (
+              <GovernanceActionCard
+                key={action.id}
+                action={action}
+                onResolve={handleResolve}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Error */}
-      {error && (
-        <div
-          style={{
-            padding: '12px 16px',
-            borderRadius: 8,
-            background: '#fef2f2',
-            border: '1px solid #ef4444',
-            color: '#991b1b',
-            fontSize: 14,
-          }}
-        >
-          {error}
-        </div>
-      )}
+      <style>{`
+        .skeleton {
+          background: linear-gradient(90deg, #f0f0ec 25%, #e5e5e3 50%, #f0f0ec 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+    </div>
+  )
+}
 
-      {/* Empty state */}
-      {!loading && !error && actions.length === 0 && (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '64px 24px',
-            background: '#f9fafb',
-            borderRadius: 12,
-            border: '2px dashed #e5e7eb',
-          }}
-        >
-          <AlertTriangle size={32} style={{ color: '#d1d5db', margin: '0 auto 12px' }} />
-          <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: '#374151' }}>
-            No pending changes
-          </p>
-          <p style={{ margin: 0, fontSize: 13, color: '#6b7280' }}>
-            Structural changes (new agents, new tools) will appear here for review.
-          </p>
+function SkeletonCard() {
+  return (
+    <div
+      style={{
+        background: '#ffffff',
+        border: '1px solid #e5e5e3',
+        borderRadius: 10,
+        padding: '16px 20px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      }}
+    >
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <div className="skeleton" style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div className="skeleton" style={{ height: 14, width: '40%', marginBottom: 8, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 11, width: '25%', borderRadius: 4 }} />
         </div>
-      )}
-
-      {/* Cards */}
-      {!loading && !error && actions.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {actions.map(action => (
-            <GovernanceActionCard
-              key={action.id}
-              action={action}
-              onResolve={handleResolve}
-            />
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   )
 }

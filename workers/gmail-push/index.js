@@ -11,14 +11,14 @@
  *   AGENTOS_WEBHOOK_URL            — full URL to https://<your-app>.vercel.app/api/webhooks/gmail
  */
 
-const VERIFICATION_TOKEN = GOOGLE_PUBSUB_VERIFICATION_TOKEN;
-const AGENTOS_WEBHOOK_URL = AGENTOS_WEBHOOK_URL;
-
 /**
  * Handle incoming Gmail push notification.
  */
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: { GOOGLE_PUBSUB_VERIFICATION_TOKEN: string; AGENTOS_WEBHOOK_URL: string }): Promise<Response> {
+    const VERIFICATION_TOKEN = env.GOOGLE_PUBSUB_VERIFICATION_TOKEN;
+    const AGENTOS_WEBHOOK_URL = env.AGENTOS_WEBHOOK_URL;
+
     // Handle Google Pub/Sub verification challenge
     if (request.method === 'GET' && request.url.includes('token=')) {
       const token = new URL(request.url).searchParams.get('token');

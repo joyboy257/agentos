@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     await saveCredential(
       nanoid(),
-      session.user_id,
+      session.userId,
       'gmail',
       encryptedTokens,
       expiresAt

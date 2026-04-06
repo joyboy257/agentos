@@ -232,7 +232,7 @@ function CanvasPageContent() {
       </div>
 
       {/* Main React Flow canvas */}
-      <InfiniteCanvas />
+      <InfiniteCanvas canvasId={currentCanvasId} />
 
       {/* Top-right controls: notifications bell + reasoning panel */}
       <div
