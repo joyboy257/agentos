@@ -8,6 +8,7 @@
  * Graceful degradation: if memory is not configured, all operations are no-ops.
  */
 
+import { sql } from '@vercel/postgres'
 import { getMemoryConfig } from './memory-config';
 
 const MEMORY_USER_ID_PREFIX = 'agentos_user_';
@@ -193,6 +194,7 @@ export async function deleteAllMemory(userId: string): Promise<void> {
 /**
  * Send feedback to mem0 when Maria denies a fact.
  * This adjusts mem0's extraction parameters to reduce hallucinated facts.
+ * Updates `feedback_sent_to_mem0_at` in Postgres after a successful API call.
  *
  * @param factId - The memory_facts.id that was denied
  * @param userId - AgentOS user ID
@@ -224,9 +226,17 @@ export async function sendFeedbackToMem0(
 
     if (!response.ok) {
       console.error(`[Memory] mem0 feedback API error: ${response.status}`);
-    } else {
-      console.debug(`[Memory] Feedback sent to mem0 for fact ${factId}`);
+      return;
     }
+
+    console.debug(`[Memory] Feedback sent to mem0 for fact ${factId}`);
+
+    // Record that feedback was successfully sent to mem0
+    await sql`
+      UPDATE memory_facts
+      SET feedback_sent_to_mem0_at = NOW()
+      WHERE id = ${factId}
+    `;
   } catch (err) {
     console.error('[Memory] sendFeedbackToMem0 failed:', err);
   }

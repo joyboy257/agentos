@@ -18,10 +18,64 @@ interface Canvas {
   is_default: boolean
 }
 
+const TEAM_STATUS_COLORS: Record<string, string> = {
+  running: '#22c55e',
+  completed: '#6b7280',
+  blocked: '#f59e0b',
+  failed: '#ef4444',
+  created: '#6b7280',
+}
+
+function TeamStatusChip({ teamId }: { teamId: string }) {
+  const [teamStatus, setTeamStatus] = useState<string>('created')
+  const [teamName, setTeamName] = useState<string>('My Team')
+
+  useEffect(() => {
+    if (!teamId) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/teams/${teamId}`)
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (cancelled) return
+        setTeamStatus(data.team?.status ?? 'created')
+        setTeamName(data.team?.name ?? 'My Team')
+      } catch { /* ignore */ }
+    }
+    load()
+    const interval = setInterval(load, 5000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [teamId])
+
+  if (!teamId) return null
+  const color = TEAM_STATUS_COLORS[teamStatus] ?? '#6b7280'
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '6px 12px', borderRadius: 8,
+      background: '#1a1a18', border: '1px solid #2a2a2a',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+    }}>
+      <span style={{
+        width: 8, height: 8, borderRadius: '50%',
+        background: color,
+        animation: teamStatus === 'running' ? 'pulse 1.5s ease-in-out infinite' : 'none',
+        flexShrink: 0,
+      }} />
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+        {teamName}
+      </span>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
+    </div>
+  )
+}
+
 function CanvasPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { nodes, edges } = useCanvas()
+  const { nodes, edges, teamId } = useCanvas()
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [reasoningPanelOpen, setReasoningPanelOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -212,6 +266,9 @@ function CanvasPageContent() {
             </div>
           )}
         </div>
+
+        {/* Team status chip — visible when a team is loaded */}
+        <TeamStatusChip teamId={teamId ?? ''} />
 
         {/* Activity link */}
         <Link

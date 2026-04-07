@@ -96,8 +96,28 @@ interface AnthropicStreamEvent {
 
 const TOOL_TIMEOUTS: Record<string, number> = {
   'web.search': 15_000,
-  'hubspot.read': 30_000,
-  'hubspot.write': 20_000,
+  'hubspot.contacts.list': 30_000,
+  'hubspot.contacts.search': 30_000,
+  'hubspot.deals.list': 30_000,
+  'hubspot.deals.get': 20_000,
+  'hubspot.tickets.list': 30_000,
+  'hubspot.company.get': 20_000,
+  'hubspot.contacts.create': 20_000,
+  'hubspot.contacts.update': 20_000,
+  'hubspot.deals.create': 20_000,
+  'hubspot.deals.update_stage': 20_000,
+  'hubspot.notes.create': 20_000,
+  'hubspot.tickets.create': 20_000,
+  'slack.channel.post': 15_000,
+  'slack.channel.update': 10_000,
+  'slack.channels.list': 15_000,
+  'slack.messages.recent': 15_000,
+  'calendar.events.create': 20_000,
+  'calendar.events.update': 20_000,
+  'calendar.events.delete': 15_000,
+  'calendar.events.list': 15_000,
+  'calendar.events.get': 10_000,
+  'calendar.availability.get': 15_000,
 }
 
 /**

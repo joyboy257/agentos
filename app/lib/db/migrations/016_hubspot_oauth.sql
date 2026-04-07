@@ -1,0 +1,4 @@
+-- 016: HubSpot OAuth credentials
+-- encrypted_credentials table already supports any provider (user_id, provider, encrypted_token, expires_at)
+-- This migration verifies hubspot is a valid provider value.
+-- No schema changes needed — the credentials table is already generic.

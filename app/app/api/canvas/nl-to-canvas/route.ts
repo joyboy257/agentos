@@ -6,6 +6,7 @@ import { ulid } from 'ulid'
 import { createGovernanceAction } from '@/lib/db/queries'
 import type { AgentGraph, Connection, Agent, ClarificationOption, AgentRole } from '@/lib/nl/types'
 import { AVAILABLE_TOOLS } from '@/lib/nl/agent-registry'
+import { capabilityRegistry } from '@/lib/capability-registry'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -52,6 +53,7 @@ export interface NLToCanvasResponse {
   options?: ClarificationOption[]
   error?: string
   governance_required?: boolean
+  governanceActionId?: string
   new_tools?: string[]
 }
 
@@ -200,19 +202,32 @@ export async function POST(req: NextRequest) {
   }
 
   // ---------------------------------------------------------------------------
-  // Governance check: if new agents use tools not in AVAILABLE_TOOLS, create a
-  // governance action and return governance_required instead of proceeding.
+  // Governance check: if new agents use tools not in AVAILABLE_TOOLS or tools
+  // with permissionLevel 'admin_only', create a governance action and return
+  // governance_required instead of proceeding.
   // ---------------------------------------------------------------------------
   const existingTools = new Set(existingCanvas.flatMap(a => a.tools))
-  const newTools = result.graph.agents.flatMap(a => a.tools).filter(t => !existingTools.has(t) && !AVAILABLE_TOOLS.includes(t as any))
-  if (newTools.length > 0) {
+  const allTools = result.graph.agents.flatMap(a => a.tools)
+
+  // Tools that are new (not in existing canvas and not in AVAILABLE_TOOLS)
+  const unknownTools = allTools.filter(t => !existingTools.has(t) && !AVAILABLE_TOOLS.includes(t as any))
+
+  // Tools with admin_only permission that are new to this user
+  const adminTools = allTools.filter(t => {
+    if (existingTools.has(t)) return false
+    const toolDef = capabilityRegistry.getToolDef(t)
+    return toolDef?.permissionLevel === 'admin_only'
+  })
+
+  const toolsRequiringGovernance = [...new Set([...unknownTools, ...adminTools])]
+  if (toolsRequiringGovernance.length > 0) {
     const governancePayload = JSON.stringify({
       goal: body.goal,
       agents: result.graph.agents,
-      new_tools: newTools,
+      new_tools: toolsRequiringGovernance,
       canvas_id: body.teamId,
     })
-    await createGovernanceAction({
+    const governanceAction = await createGovernanceAction({
       id: ulid(),
       user_id: session.userId,
       canvas_id: body.teamId,
@@ -221,8 +236,9 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({
       governance_required: true,
-      explanation: 'This request introduces new tools that need governance review before activation.',
-      new_tools: newTools,
+      governanceActionId: governanceAction.id,
+      explanation: 'A new agent needs your approval before it can be activated. It has been added to your Governance Board.',
+      new_tools: toolsRequiringGovernance,
     } satisfies NLToCanvasResponse)
   }
 

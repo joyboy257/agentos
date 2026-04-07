@@ -28,14 +28,30 @@ const archetypeColors: Record<NonNullable<AgentNodeData['archetype']>, { color: 
   Distill: { color: '#10b981', bgColor: '#ecfdf5' },
 }
 
+// Coordinator (Team Lead) styling constants — applied when data.isCoordinator === true
+const COORDINATOR_BG = '#1e1b4b'
+const COORDINATOR_BORDER = '#6366f1'
+const COORDINATOR_TEXT = '#ffffff'
+const COORDINATOR_MUTED = '#a5b4fc'
+const COORDINATOR_BADGE_BG = '#6366f1'
+const COORDINATOR_STATUS_GREEN = '#22c55e'
+const COORDINATOR_STATUS_BLUE = '#3b82f6'
+const COORDINATOR_STATUS_AMBER = '#f59e0b'
+const COORDINATOR_STATUS_RED = '#ef4444'
+
 function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
   const nodeData = data as AgentNodeData
-  const borderColor = roleColors[nodeData.role] ?? '#e5e5e3'
+  const isCoordinator = nodeData.isCoordinator === true
+  const isTeamLead = nodeData.role === 'Team Lead' || isCoordinator
+
+  // Coordinator uses indigo theme; regular agents use the existing role-based theme
+  const borderColor = isCoordinator
+    ? COORDINATOR_BORDER
+    : roleColors[nodeData.role] ?? '#e5e5e3'
   const statusColor = statusColors[nodeData.status] ?? statusColors.idle
 
-  const isTeamLead = nodeData.role === 'Team Lead'
-  const width = isTeamLead ? 280 : 220
-  const height = isTeamLead ? 150 : 120
+  const width = isCoordinator ? 200 : isTeamLead ? 280 : 220
+  const height = isCoordinator ? 160 : isTeamLead ? 150 : 120
 
   const handleViewTrace = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -48,12 +64,134 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
     }
   }
 
+  // ─── Coordinator (Team Lead) variant ───────────────────────────────────────
+  if (isCoordinator) {
+    return (
+      <div
+        onClick={(e) => {
+          e.stopPropagation()
+          const event = new CustomEvent('node-select', { detail: { id }, bubbles: true })
+          document.dispatchEvent(event)
+        }}
+        style={{
+          width,
+          height,
+          background: COORDINATOR_BG,
+          border: `2px solid ${statusColor}`,
+          borderRadius: 12,
+          padding: 12,
+          boxShadow: `0 0 0 1px ${statusColor}40, 0 4px 16px rgba(0,0,0,0.20)`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          position: 'relative',
+          outline: selected ? `2px solid ${statusColor}` : 'none',
+          outlineOffset: '2px',
+          cursor: 'pointer',
+        }}
+      >
+        {/* Coordinator badge */}
+        <div
+          style={{
+            position: 'absolute',
+            top: -10,
+            left: 12,
+            background: COORDINATOR_BADGE_BG,
+            color: '#fff',
+            fontSize: 9,
+            fontWeight: 700,
+            padding: '2px 6px',
+            borderRadius: 4,
+            letterSpacing: '0.05em',
+          }}
+        >
+          COORDINATOR
+        </div>
 
+        {/* Node content */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <div style={{ fontSize: 18 }}>
+            <span style={{ color: '#fbbf24' }}>★</span>
+          </div>
+          <div>
+            <div style={{ color: COORDINATOR_TEXT, fontWeight: 600, fontSize: 13 }}>
+              {nodeData.name}
+            </div>
+            <div
+              style={{
+                color: statusColor,
+                fontSize: 11,
+                textTransform: 'capitalize',
+              }}
+            >
+              {nodeData.status.replace('_', ' ')}
+            </div>
+          </div>
+        </div>
+
+        {/* Team member health dots */}
+        {nodeData.teamMembers && nodeData.teamMembers.length > 0 && (
+          <div
+            style={{
+              marginTop: 4,
+              display: 'flex',
+              gap: 4,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            <span style={{ color: COORDINATOR_MUTED, fontSize: 10, fontWeight: 500 }}>
+              Team:
+            </span>
+            {nodeData.teamMembers.map((m) => (
+              <div
+                key={m.agentId}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background:
+                    m.status === 'completed'
+                      ? COORDINATOR_STATUS_GREEN
+                      : m.status === 'failed'
+                        ? COORDINATOR_STATUS_RED
+                        : m.status === 'running'
+                          ? COORDINATOR_STATUS_BLUE
+                          : '#6b7280',
+                }}
+                title={`${m.name}: ${m.status}`}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Running subtitle */}
+        {nodeData.status === 'running' && (
+          <div style={{ color: COORDINATOR_MUTED, fontSize: 10 }}>
+            Coordinating {nodeData.teamMembers?.length ?? 0} worker(s)...
+          </div>
+        )}
+
+        {/* Handles */}
+        <Handle
+          type="target"
+          position={Position.Top}
+          style={{ background: COORDINATOR_BORDER, width: 8, height: 8, border: 'none' }}
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          style={{ background: COORDINATOR_BORDER, width: 8, height: 8, border: 'none' }}
+        />
+      </div>
+    )
+  }
+
+  // ─── Regular / Worker variant ─────────────────────────────────────────────
   return (
     <div
       onClick={(e) => {
         e.stopPropagation()
-        // Dispatch selection event to parent
         const event = new CustomEvent('node-select', { detail: { id }, bubbles: true })
         document.dispatchEvent(event)
       }}
@@ -109,7 +247,13 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
               fontWeight: 400,
             }}
           >
-            {nodeData.status === 'running' ? 'Running' : nodeData.status === 'scheduled' ? 'Scheduled' : nodeData.status === 'paused_budget' ? 'Budget exceeded' : 'Idle'}
+            {nodeData.status === 'running'
+              ? 'Running'
+              : nodeData.status === 'scheduled'
+                ? 'Scheduled'
+                : nodeData.status === 'paused_budget'
+                  ? 'Budget exceeded'
+                  : 'Idle'}
           </span>
           <span
             style={{
@@ -167,9 +311,7 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
             color: '#888',
           }}
         >
-          {nodeData.status === 'running'
-            ? 'Coordinating workers'
-            : 'Team is idle'}
+          {nodeData.status === 'running' ? 'Coordinating workers' : 'Team is idle'}
         </div>
       )}
 

@@ -1,0 +1,1 @@
+export { authMiddleware as default } from './lib/auth/middleware'

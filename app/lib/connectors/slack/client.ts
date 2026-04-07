@@ -198,3 +198,103 @@ export async function postAgentSummary(
 
   return postMessage(userId, channel, text)
 }
+
+// ---------------------------------------------------------------------------
+// Additional Slack API functions
+// ---------------------------------------------------------------------------
+
+export async function listChannels(
+  token: string,
+  limit = 100
+): Promise<{ channels: any[]; hasMore: boolean }> {
+  const response = await fetch('https://slack.com/api/conversations.list', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ limit, types: 'public_channel,private_channel' }),
+    signal: AbortSignal.timeout(30_000),
+  })
+
+  if (!response.ok) {
+    throw Object.assign(new Error(`Slack API ${response.status}`), { status: response.status })
+  }
+
+  const data = await response.json() as { ok: boolean; channels?: any[]; error?: string }
+  if (!data.ok) {
+    throw Object.assign(new Error(`Slack API error: ${data.error}`), { code: data.error })
+  }
+
+  return { channels: data.channels ?? [], hasMore: false }
+}
+
+export async function getRecentMessages(
+  token: string,
+  channel: string,
+  limit = 20
+): Promise<{ messages: any[]; hasMore: boolean }> {
+  const response = await fetch('https://slack.com/api/conversations.history', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ channel, limit }),
+    signal: AbortSignal.timeout(30_000),
+  })
+
+  if (!response.ok) {
+    throw Object.assign(new Error(`Slack API ${response.status}`), { status: response.status })
+  }
+
+  const data = await response.json() as { ok: boolean; messages?: any[]; has_more?: boolean; error?: string }
+  if (!data.ok) {
+    throw Object.assign(new Error(`Slack API error: ${data.error}`), { code: data.error })
+  }
+
+  return { messages: data.messages ?? [], hasMore: data.has_more ?? false }
+}
+
+export async function sendDirectMessage(
+  token: string,
+  userId: string,
+  text: string
+): Promise<{ success: true; ts: string }> {
+  // Open a DM channel first
+  const openRes = await fetch('https://slack.com/api/conversations.open', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ users: userId }),
+    signal: AbortSignal.timeout(30_000),
+  })
+
+  if (!openRes.ok) {
+    throw Object.assign(new Error(`Slack API ${openRes.status}`), { status: openRes.status })
+  }
+
+  const openData = await openRes.json() as { ok: boolean; channel?: { id: string }; error?: string }
+  if (!openData.ok || !openData.channel) {
+    throw Object.assign(new Error(`Slack API error: ${openData.error}`), { code: openData.error })
+  }
+
+  const postRes = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ channel: openData.channel.id, text, mrkdwn: true }),
+    signal: AbortSignal.timeout(30_000),
+  })
+
+  const postData = await postRes.json() as { ok: boolean; ts?: string; error?: string }
+  if (!postData.ok || !postData.ts) {
+    throw Object.assign(new Error(`Slack API error: ${postData.error}`), { code: postData.error })
+  }
+
+  return { success: true, ts: postData.ts }
+}

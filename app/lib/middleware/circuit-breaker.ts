@@ -134,6 +134,8 @@ export const circuitBreakers: Record<string, CircuitBreaker> = {
   hubspot: createCircuitBreaker('hubspot', { threshold: 3, resetTimeoutMs: 30_000 }),
   web: createCircuitBreaker('web', { threshold: 5, resetTimeoutMs: 15_000 }),
   llm: createCircuitBreaker('llm', { threshold: 10, resetTimeoutMs: 60_000 }),
+  'google-calendar': createCircuitBreaker('google-calendar', { threshold: 3, resetTimeoutMs: 30_000 }),
+  calendar: createCircuitBreaker('calendar', { threshold: 3, resetTimeoutMs: 30_000 }),
 }
 
 /**

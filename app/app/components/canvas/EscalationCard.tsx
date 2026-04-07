@@ -15,6 +15,12 @@ export interface EscalationData {
   summary: string
   toolName: string
   args: Record<string, unknown>
+  teamContext?: {
+    workerName: string
+    taskId: string
+    teamId: string
+    blastRadius?: string
+  }
 }
 
 export interface EscalationCardProps {
@@ -24,8 +30,10 @@ export interface EscalationCardProps {
   args: Record<string, unknown>
   onApprove: () => void
   onEdit: (revisedArgs: Record<string, unknown>) => void
+  onSkip: () => void
   onCancel: () => void
   position?: { x: number; y: number }
+  teamContext?: EscalationData['teamContext']
 }
 
 // ---------------------------------------------------------------------------
@@ -67,8 +75,10 @@ export function EscalationCard({
   args,
   onApprove,
   onEdit,
+  onSkip,
   onCancel,
   position,
+  teamContext,
 }: EscalationCardProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [editedArgs, setEditedArgs] = useState<Record<string, unknown>>({ ...args })
@@ -109,6 +119,16 @@ export function EscalationCard({
     setSubmitting(true)
     try {
       await onCancel()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSkip = async () => {
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      await onSkip()
     } finally {
       setSubmitting(false)
     }
@@ -173,10 +193,48 @@ export function EscalationCard({
                 lineHeight: 1.4,
               }}
             >
-              {agentName} — needs your input
+              {teamContext?.workerName ?? agentName} — needs your input{' '}
+              {teamContext && (
+                <span
+                  style={{
+                    display: 'inline-block',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    background: '#7c3aed',
+                    color: '#fff',
+                    borderRadius: 4,
+                    padding: '1px 5px',
+                    verticalAlign: 'middle',
+                    marginLeft: 6,
+                  }}
+                >
+                  Team
+                </span>
+              )}
             </p>
           </div>
         </div>
+
+        {/* Blast radius warning — shown for team escalations */}
+        {teamContext?.blastRadius && (
+          <div
+            style={{
+              padding: '10px 20px',
+              background: 'rgba(239, 68, 68, 0.08)',
+              borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'flex-start',
+            }}
+          >
+            <span style={{ fontSize: 13, color: '#991b1b', fontWeight: 500 }}>
+              Impact:{' '}
+              <span style={{ fontStyle: 'italic' }}>{teamContext.blastRadius}</span>
+            </span>
+          </div>
+        )}
 
         {/* Summary */}
         <div
@@ -406,6 +464,26 @@ export function EscalationCard({
                 Cancel
               </button>
               <button
+                onClick={handleSkip}
+                disabled={submitting}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  border: '1px solid #d1d5db',
+                  background: '#f3f4f6',
+                  color: '#6b7280',
+                  opacity: submitting ? 0.5 : 1,
+                }}
+              >
+                Skip
+              </button>
+              <button
                 onClick={handleEditClick}
                 disabled={submitting}
                 style={{
@@ -514,5 +592,11 @@ export const DEMO_ESCALATION: EscalationData = {
     to: 'ceo@acme.com',
     subject: 'Re: Enterprise Deal Discussion — Next Steps',
     body: 'Hi,\n\nThank you for your interest in our enterprise plan. I would be happy to schedule a call to discuss the $50,000 annual package...\n\nBest,\nMaria',
+  },
+  teamContext: {
+    workerName: 'Lead Research Worker',
+    taskId: 'task-lead-research-001',
+    teamId: 'team-sales-001',
+    blastRadius: 'Email will be sent to a new contact outside approved list',
   },
 }

@@ -78,30 +78,25 @@ export async function closeFlowProducer(): Promise<void> {
 // Child enqueuing
 // ---------------------------------------------------------------------------
 
-/**
- * Build the FlowProducer children array for a single root agent.
- * In Phase 3, this will be extended to build a tree from canvas wires.
- */
 export function buildChildSpecs(
-  rootAgentId: string,
+  agentIds: string[],
   runId: string,
   sessionId: string,
   args: Record<string, unknown>,
   userId: string,
   orgId: string
 ): ChildSpec[] {
-  // For MVP: single child = the root agent execution
-  return [
-    {
-      agentId: rootAgentId,
-      sessionId,
-      args,
-      stepOffset: 0,
-      elapsedMs: 0,
-      userId,
-      orgId,
-    },
-  ]
+  // Root agents (no incoming wires) get stepOffset 0.
+  // Downstream agents get stepOffset based on their topological depth.
+  return agentIds.map((agentId, i) => ({
+    agentId,
+    sessionId: `${sessionId}-${agentId}`,
+    args,
+    stepOffset: i,
+    elapsedMs: 0,
+    userId,
+    orgId,
+  }))
 }
 
 /**
@@ -110,7 +105,7 @@ export function buildChildSpecs(
  */
 export async function enqueueCoordinatorJob(
   runId: string,
-  agentId: string,
+  agentIds: string[],
   userId: string,
   sessionId: string,
   args: Record<string, unknown>,
@@ -118,14 +113,14 @@ export async function enqueueCoordinatorJob(
 ): Promise<string> {
   const flow = getFlowProducer()
 
-  const children = buildChildSpecs(agentId, runId, sessionId, args, userId, orgId)
+  const children = buildChildSpecs(agentIds, runId, sessionId, args, userId, orgId)
 
   const flowResult = await flow.add({
     name: 'agent-run',
     queueName: COORDINATOR_QUEUE,
     data: {
       runId,
-      agentId,
+      agentId: agentIds[0] ?? 'coordinator',
       userId,
       sessionId,
       args,

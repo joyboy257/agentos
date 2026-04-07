@@ -19,7 +19,6 @@ export type LaneEventName =
   | 'lane.completed'
   | 'lane.failed'
   | 'lane.waiting'
-  | 'lane.waiting'
 
 export type LaneEventStatus = 'running' | 'blocked' | 'green' | 'failed' | 'completed'
 
@@ -47,11 +46,64 @@ export interface LaneEvent {
 type LaneEventHandler = (event: LaneEvent) => void
 
 // ---------------------------------------------------------------------------
+// Redis pub/sub for cross-process lane events (BullMQ child jobs)
+// ---------------------------------------------------------------------------
+
+let redisPub: import('ioredis').Redis | null = null
+let redisSub: import('ioredis').Redis | null = null
+
+function getRedisPub(): import('ioredis').Redis {
+  if (!redisPub) {
+    const { getRedisConnection } = require('../scheduler/client')
+    redisPub = getRedisConnection().duplicate()
+  }
+  return redisPub
+}
+
+function getRedisSub(): import('ioredis').Redis {
+  if (!redisSub) {
+    const { getRedisConnection } = require('../scheduler/client')
+    redisSub = getRedisConnection().duplicate()
+  }
+  return redisSub
+}
+
+/** Channel prefix for a team's lane events on Redis. */
+function teamChannel(teamId: string): string {
+  return `lane-events:${teamId}`
+}
+
+// ---------------------------------------------------------------------------
 // In-memory event bus (singleton per team)
 // ---------------------------------------------------------------------------
 
 // Map<teamId, Set<LaneEventHandler>>
 export const laneEventBus = new Map<string, Set<LaneEventHandler>>()
+
+// Map<teamId, Set<LaneEventHandler>> — Redis subscribers per team
+const redisBus = new Map<string, Set<LaneEventHandler>>()
+
+function subscribeToRedisChannel(tid: string): void {
+  const ch = teamChannel(tid)
+  const sub = getRedisSub()
+  void sub.subscribe(ch).then((result: string) => {
+    if (result !== 'subscribe') {
+      console.warn(`[LaneEvents] Failed to subscribe to Redis channel ${ch}: ${result}`)
+    }
+  })
+  sub.on('message', (channel: string, message: string) => {
+    if (channel !== ch) return
+    try {
+      const event: LaneEvent = JSON.parse(message)
+      const handlers = laneEventBus.get(tid)
+      if (handlers) {
+        for (const handler of handlers) {
+          try { handler(event) } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore malformed messages */ }
+  })
+}
 
 // ---------------------------------------------------------------------------
 // LaneEventEmitter
@@ -65,13 +117,21 @@ export class LaneEventEmitter {
    */
   emit(event: LaneEvent): void {
     const handlers = laneEventBus.get(this.teamId)
-    if (!handlers) return
-    for (const handler of handlers) {
-      try {
-        handler(event)
-      } catch (err) {
-        console.error(`[LaneEvents] Handler error for team ${this.teamId}:`, err)
+    if (handlers) {
+      for (const handler of handlers) {
+        try {
+          handler(event)
+        } catch (err) {
+          console.error(`[LaneEvents] Handler error for team ${this.teamId}:`, err)
+        }
       }
+    }
+    // Also publish to Redis so BullMQ child job workers can receive events
+    try {
+      const pub = getRedisPub()
+      void pub.publish(teamChannel(this.teamId), JSON.stringify(event))
+    } catch (err) {
+      console.warn(`[LaneEvents] Failed to publish event to Redis:`, err)
     }
   }
 
@@ -83,12 +143,18 @@ export class LaneEventEmitter {
     if (!laneEventBus.has(this.teamId)) {
       laneEventBus.set(this.teamId, new Set())
     }
+    // Also ensure Redis subscriber is active for this team
+    if (!redisBus.has(this.teamId)) {
+      redisBus.set(this.teamId, new Set())
+      subscribeToRedisChannel(this.teamId)
+    }
     const handlers = laneEventBus.get(this.teamId)!
     handlers.add(handler)
     return () => {
       handlers.delete(handler)
       if (handlers.size === 0) {
         laneEventBus.delete(this.teamId)
+        redisBus.delete(this.teamId)
       }
     }
   }

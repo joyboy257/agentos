@@ -22,6 +22,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueueGmailPush } from '@/lib/runtime/proactive-queue';
+import { getUserByEmail, listAgents } from '@/lib/db/queries';
 
 export const runtime = 'nodejs';
 
@@ -80,16 +81,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { threadId, from, subject, snippet } = msgData;
   const messageId = message.messageId ?? '';
 
-  /**
-   * agentId is resolved from the user's active agent.
-   * For MVP: use the first active agent for the user.
-   * TODO (Phase 2+): multi-agent — route to the correct agent per label/topic.
-   *
-   * For now, extract agentId from the session or default to system.
-   * The worker will resolve the correct agent from the run context.
-   */
-  const agentId = 'default-agent'; // TODO: resolve from auth/session context
-  const userId = 'system';         // TODO: resolve from auth/session context
+  // Look up the user by the from email address in the Gmail message
+  const fromEmail = from;
+  const user = await getUserByEmail(fromEmail);
+  if (!user) {
+    return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
+  }
+  const userId = user.id;
+
+  // Look up the user's active (non-stopped) agent
+  const agents = await listAgents(userId);
+  const activeAgent = agents.find((a) => a.status !== 'stopped');
+  if (!activeAgent) {
+    return NextResponse.json({ error: 'no_active_agent' }, { status: 404 });
+  }
+  const agentId = activeAgent.id;
 
   try {
     await enqueueGmailPush({

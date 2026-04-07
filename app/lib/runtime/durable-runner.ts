@@ -481,7 +481,6 @@ export class DurableRunner implements Runner {
    * @param teamId — the team to execute (from teams DB table)
    */
   async executeTeam(teamId: string): Promise<void> {
-    const { runCoordinator } = await import('./coordinator-loop')
     const { getCanvas, getAgent, updateTeamStatus, createTask, listTasks, getTeam } = await import('../db/queries')
     const laneEmitter = this.getLaneEmitter(teamId)
 
@@ -524,20 +523,47 @@ export class DurableRunner implements Runner {
 
     await updateTeamStatus(teamId, 'running')
 
-    await runCoordinator({
-      teamId,
-      agents,
-      onAgentStart(agentId) {
-        laneEmitter.started(agentId, agentId)
-      },
-      onAgentComplete(agentId, artifact) {
-        laneEmitter.completed(agentId, agentId, artifact)
-      },
-      onAgentError(agentId, err) {
-        laneEmitter.failed(agentId, agentId, err.message)
-      },
-    })
+    if (process.env.USE_BULLMQ_ORCHESTRATION === 'true') {
+      // BullMQ distributed parent-child path via FlowProducer
+      const { enqueueCoordinatorJob } = await import('./coordinator-producer')
+      const { listCanvasWiresForTeam } = await import('../db/queries')
+      const wires = await listCanvasWiresForTeam(teamId)
+      const rootAgents = agents.filter(a => !wires.some(w => w.target_id === a.id))
+      const rootAgentIds = rootAgents.map(a => a.id)
 
-    await updateTeamStatus(teamId, 'completed')
+      // Fire-and-forget: parent job enqueues children, worker emits lane events via Redis
+      void enqueueCoordinatorJob(
+        `run-${ulid()}`,
+        rootAgentIds,
+        team.user_id,
+        `sess-${ulid()}`,
+        { prompt: 'Run team.' },
+        ''
+      ).catch(err => {
+        console.error('[executeTeam] enqueueCoordinatorJob failed:', err)
+        void updateTeamStatus(teamId, 'failed')
+      })
+    } else {
+      // In-process coordinator loop (default for dev)
+      const { runCoordinator } = await import('./coordinator-loop')
+      await runCoordinator({
+        teamId,
+        agents,
+        onAgentStart(agentId) {
+          laneEmitter.started(agentId, agentId)
+        },
+        onAgentComplete(agentId, artifact) {
+          laneEmitter.completed(agentId, agentId, artifact, 0, 0)
+        },
+        onAgentBlocked(agentId) {
+          laneEmitter.blocked(agentId, agentId, 'needs approval')
+          void updateTeamStatus(teamId, 'blocked')
+        },
+        onAgentError(agentId, err) {
+          laneEmitter.failed(agentId, agentId, err.message)
+        },
+      })
+      await updateTeamStatus(teamId, 'completed')
+    }
   }
 }

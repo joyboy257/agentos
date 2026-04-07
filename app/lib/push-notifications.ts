@@ -11,6 +11,8 @@
 import webpush from 'web-push'
 import { sql } from '@vercel/postgres'
 
+import { isSlackConnected, sendMessage as sendSlackMessage, getSlackToken, listChannels } from './integrations/slack'
+
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? 'mailto:admin@agentos.ai'
@@ -34,6 +36,7 @@ export interface PushSubscriptionRow {
 
 /**
  * Send a push notification to all browser subscriptions for the user who owns the run.
+ * Also routes to Slack if the user has Slack connected.
  * Called from the preApproval hook in approval-manager.ts.
  */
 export async function sendApprovalPush(params: {
@@ -59,7 +62,31 @@ export async function sendApprovalPush(params: {
   const userId = runResult.rows[0].user_id
   const agentName = runResult.rows[0].name || 'Agent'
 
-  // Fetch all active push subscriptions for this user
+  // ── Slack notification transport ────────────────────────────────────────────
+  if (await isSlackConnected(userId)) {
+    const token = await getSlackToken(userId)
+    if (token) {
+      try {
+        // Find the user's default channel (#general or first available)
+        const { channels } = await listChannels(token, 10)
+        const defaultChannel = channels.find((c) => c.name === 'general') ?? channels[0]
+        if (defaultChannel) {
+          const text = [
+            `*Agent needs your input — ${agentName}*`,
+            ``,
+            `*Waiting on:* ${summary}`,
+            ``,
+            `_View and approve at ${process.env.NEXT_PUBLIC_APP_URL}/runs/${runId}_`,
+          ].join('\n')
+          await sendSlackMessage(token, defaultChannel.id, text)
+        }
+      } catch (err) {
+        console.error('[push] slack send error:', err)
+      }
+    }
+  }
+
+  // ── Web Push notification transport ────────────────────────────────────────
   const result = await sql`
     SELECT endpoint, p256dh, auth
     FROM push_subscriptions
