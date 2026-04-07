@@ -125,9 +125,10 @@ export async function createCheckpoint(data: {
   tool_result?: unknown | null;
   tool_args?: Record<string, unknown> | null;
   total_tokens?: number | null;
+  child_job_id?: string | null;
 }): Promise<Checkpoint> {
   const result = await sql`
-    INSERT INTO checkpoints (run_id, step, state_before, state_after, tool_name, tool_call_id, tool_result, tool_args, total_tokens)
+    INSERT INTO checkpoints (run_id, step, state_before, state_after, tool_name, tool_call_id, tool_result, tool_args, total_tokens, child_job_id)
     VALUES (
       ${data.run_id}, ${data.step},
       ${data.state_before ? JSON.stringify(data.state_before) : null},
@@ -136,7 +137,8 @@ export async function createCheckpoint(data: {
       ${data.tool_call_id ?? null},
       ${data.tool_result ? JSON.stringify(data.tool_result) : null},
       ${data.tool_args ? JSON.stringify(data.tool_args) : null},
-      ${data.total_tokens ?? null}
+      ${data.total_tokens ?? null},
+      ${data.child_job_id ?? null}
     )
     RETURNING *
   `;
@@ -385,6 +387,30 @@ export async function deleteCanvasWire(id: string, teamId: string): Promise<void
   await sql`DELETE FROM canvas_wires WHERE id = ${id} AND team_id = ${teamId}`
 }
 
+// --- TASK OUTPUT (for wire artifact passing) ---
+export interface TaskOutput {
+  id: string
+  task_id: string
+  artifact: unknown
+  created_at: Date
+}
+
+export async function getTaskOutput(taskId: string): Promise<unknown | null> {
+  const { rows } = await sql`
+    SELECT artifact FROM task_outputs WHERE task_id = ${taskId} ORDER BY created_at DESC LIMIT 1
+  `
+  return rows[0]?.artifact ?? null
+}
+
+export async function upsertTaskOutput(taskId: string, artifact: unknown): Promise<void> {
+  const id = ulid()
+  await sql`
+    INSERT INTO task_outputs (id, task_id, artifact)
+    VALUES (${id}, ${taskId}, ${JSON.stringify(artifact)})
+    ON CONFLICT (task_id) DO UPDATE SET artifact = EXCLUDED.artifact
+  `
+}
+
 // --- MAGIC LINK TOKENS (legacy for magic-link.ts) ---
 // These are called by lib/auth/magic-link.ts
 
@@ -592,4 +618,83 @@ export async function resolveGovernanceAction(
     SET status = ${status}, resolved_at = NOW(), resolved_by = ${resolvedBy}
     WHERE id = ${id}
   `
+}
+
+// --- TEAMS ---
+export interface TeamRow {
+  id: string
+  canvas_id: string
+  name: string
+  coordinator_session_id: string | null
+  status: 'created' | 'running' | 'completed' | 'deleted'
+  created_at: Date
+  updated_at: Date
+}
+
+export async function createTeamRow(data: { canvas_id: string; name: string }): Promise<TeamRow> {
+  const { rows } = await sql`
+    INSERT INTO teams (canvas_id, name)
+    VALUES (${data.canvas_id}, ${data.name})
+    RETURNING *
+  `
+  return rows[0] as TeamRow
+}
+
+export async function getTeam(id: string): Promise<TeamRow | null> {
+  const { rows } = await sql`SELECT * FROM teams WHERE id = ${id}`
+  return rows[0] as TeamRow ?? null
+}
+
+export async function listTeams(canvasId: string): Promise<TeamRow[]> {
+  const { rows } = await sql`SELECT * FROM teams WHERE canvas_id = ${canvasId} ORDER BY created_at DESC`
+  return rows as TeamRow[]
+}
+
+export async function updateTeamStatus(id: string, status: TeamRow['status']): Promise<void> {
+  await sql`UPDATE teams SET status = ${status}, updated_at = NOW() WHERE id = ${id}`
+}
+
+// --- TASKS ---
+export interface TaskRow {
+  id: string
+  team_id: string
+  agent_id: string
+  parent_session_id: string | null
+  branch_name: string | null
+  status: 'created' | 'running' | 'completed' | 'failed' | 'stopped'
+  output_artifact: unknown | null
+  created_at: Date
+  updated_at: Date
+}
+
+export async function createTask(data: {
+  team_id: string
+  agent_id: string
+  parent_session_id?: string | null
+  branch_name?: string | null
+}): Promise<TaskRow> {
+  const { rows } = await sql`
+    INSERT INTO tasks (team_id, agent_id, parent_session_id, branch_name)
+    VALUES (${data.team_id}, ${data.agent_id}, ${data.parent_session_id ?? null}, ${data.branch_name ?? null})
+    RETURNING *
+  `
+  return rows[0] as TaskRow
+}
+
+export async function getTask(id: string): Promise<TaskRow | null> {
+  const { rows } = await sql`SELECT * FROM tasks WHERE id = ${id}`
+  return rows[0] as TaskRow ?? null
+}
+
+export async function listTasks(teamId: string): Promise<TaskRow[]> {
+  const { rows } = await sql`SELECT * FROM tasks WHERE team_id = ${teamId} ORDER BY created_at ASC`
+  return rows as TaskRow[]
+}
+
+export async function updateTaskStatus(id: string, status: TaskRow['status']): Promise<void> {
+  await sql`UPDATE tasks SET status = ${status}, updated_at = NOW() WHERE id = ${id}`
+}
+
+export async function updateTaskOutput(id: string, artifact: unknown): Promise<void> {
+  await sql`UPDATE tasks SET output_artifact = ${JSON.stringify(artifact)}, updated_at = NOW() WHERE id = ${id}`
 }

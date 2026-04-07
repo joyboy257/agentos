@@ -229,6 +229,23 @@ function CanvasPageContent() {
           </svg>
           Activity
         </Link>
+
+        {/* HubSpot Connect */}
+        <a
+          href="/api/connectors/hubspot/authorize"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 14px', borderRadius: 8,
+            background: '#ff7a59', color: '#ffffff',
+            textDecoration: 'none', fontSize: 14, fontWeight: 600,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          }}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          Connect HubSpot
+        </a>
       </div>
 
       {/* Main React Flow canvas */}

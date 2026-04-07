@@ -10,6 +10,24 @@
  * 6. Check permissionLevel — if needs_approval, pause and emit escalation event
  * 7. Inject tool results back as a user message and continue the LLM loop
  * 8. Loop until stop_reason is "end_turn"
+ *
+ * ## Vercel AI SDK Migration — DEFERRED
+ *
+ * Migration to `streamText` from the Vercel AI SDK was explored. Key findings:
+ * - `@ai-sdk/anthropic` supports Anthropic models natively — SDK transport works
+ * - `experimental_onToolCallStart`/`experimental_onToolCallFinish` provide per-tool
+ *   callback granularity matching our checkpoint pattern
+ * - DEFERRED: `tool()` from `ai` requires strictly typed Zod schemas matching the
+ *   TOOLS generic. Our dynamic tool registry (capabilityRegistry) returns tools at
+ *   runtime, making it impossible to provide a correct `ToolSet` type to
+ *   `streamText<TOOLS>`. Even with `Record<string, Tool>` and `z.any()`, the SDK's
+ *   internal `TypedToolCall<TOOLS>` resolves to `never`.
+ *
+ * Current status: `USE_AI_SDK = false` — raw SSE implementation preserved and working.
+ * Re-approach when: tool registry provides compile-time typed tools, OR a simpler
+ * transport abstraction is added to the AI SDK, OR `any` casts are accepted.
+ *
+ * See: `lib/runtime/streaming-tool-executor.sdk.ts` for the SDK exploration code.
  */
 
 import { capabilityRegistry } from '../capability-registry'
@@ -26,6 +44,12 @@ import { classifyToolCall, shouldAutoApprove, shouldExecuteAndNotify } from '../
 import type { ClassifierDecision } from '../classifier/classifier-prompt'
 
 // ---------------------------------------------------------------------------
+// Feature flag
+// ---------------------------------------------------------------------------
+
+const USE_AI_SDK = false
+
+// ---------------------------------------------------------------------------
 // Anthropic API client — uses fetch to call the streaming messages API
 // ---------------------------------------------------------------------------
 
@@ -33,6 +57,10 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 
 // Estimated cost in ms for an LLM API call (prompt + streaming response)
 const ESTIMATED_LLM_CALL_MS = 1000
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface AnthropicMessage {
   role: 'user' | 'assistant'

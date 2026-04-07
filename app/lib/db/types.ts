@@ -12,7 +12,7 @@ export interface Agent {
   updated_at: Date;
 }
 
-export type AgentStatus = 'idle' | 'running' | 'waiting_for_approval' | 'paused' | 'paused_budget' | 'completed' | 'failed';
+export type AgentStatus = 'idle' | 'running' | 'waiting_for_approval' | 'paused' | 'paused_budget' | 'stopped' | 'completed' | 'failed';
 
 export interface Run {
   id: string;
@@ -39,6 +39,7 @@ export interface Checkpoint {
   tool_args: Record<string, unknown> | null;
   messages: unknown[] | null;
   total_tokens: number | null;
+  child_job_id: string | null;
   created_at: Date;
 }
 

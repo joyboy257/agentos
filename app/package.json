@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.67",
     "@googleapis/drive": "^20.1.0",
     "@googleapis/gmail": "^16.1.1",
     "@vercel/postgres": "^0.10.0",
     "@xyflow/react": "^12.10.2",
+    "ai": "^6.0.149",
     "better-auth": "^1.5.6",
     "bullmq": "^5.71.1",
     "drizzle": "^1.4.0",

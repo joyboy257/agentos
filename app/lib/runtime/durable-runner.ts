@@ -8,7 +8,8 @@
  * - ULID-based idempotency keys prevent duplicate tool execution
  */
 
-import type { Runner, RunResult, ExecuteOptions } from './runner-interface'
+import type { Runner, RunResult, ExecuteOptions, SingleAgentOptions } from './runner-interface'
+import { ulid } from 'ulid'
 import { generateIdempotencyKey } from './idempotency'
 import {
   createRun,
@@ -28,6 +29,8 @@ import { streamingToolExecutor, type ReasoningEvent } from './streaming-tool-exe
 import { postRunReflection } from './post-run-reflection'
 import { getAgentContext } from '../memory/memory-client'
 import type { ToolContext } from '../capability-registry/types'
+import { Session } from './session'
+import { SidechainTranscript } from './sidechain-transcript'
 
 // ---------------------------------------------------------------------------
 // Helper — maps ReasoningEvent to existing hook events
@@ -92,60 +95,29 @@ export class DurableRunner implements Runner {
     // 1. Create runs row
     const run = await createRun({ agent_id: agentId, user_id: userId })
 
-    // 2. Initialize completions map and queue
-    const completions = new Map<string, unknown>()
-    const queue: string[] = [agentId] // root agent first
-    const running = new Set<string>()
-
-    let step = 0
-
-    // Initialize working memory for this session
-    this.workingMemory = new WorkingMemory(sessionId)
-
+    // 2. Enqueue coordinator parent job + children via FlowProducer
+    //    The parent job handles fan-out orchestration via BullMQ moveToWaitingChildren.
+    //    This replaces the in-process while(running < 2) fan-out loop.
     try {
-      // 3. Concurrency loop — mirrors InProcessRunner lines 473-481
-      while (queue.length > 0 || running.size > 0) {
-        // 3a. Fill running queue up to max 2 concurrent
-        while (queue.length > 0 && running.size < 2) {
-          const agentIdToRun = queue.shift()!
-          running.add(agentIdToRun)
-
-          // Start execution of this agent (non-blocking for fan-out)
-          this.executeAgent(agentIdToRun, run.id, sessionId, args, completions, running, queue, step, elapsedMs).catch((err) => {
-            console.error(`Agent ${agentIdToRun} failed:`, err)
-            running.delete(agentIdToRun)
-          })
-        }
-
-        // Small delay to avoid tight loop
-        await new Promise((r) => setTimeout(r, 10))
-      }
-
-      // 4. Check for pending approvals — if any, return immediately
-      const pending = await getPendingApprovalsForRun(run.id)
-      if (pending.length > 0) {
-        return { runId: run.id, status: 'waiting_for_approval' }
-      }
-
-      // 5. Completion
-      await updateRunStatus(run.id, 'completed', new Date())
-
-      // Record run summary to working memory
-      if (this.workingMemory) {
-        await this.workingMemory.setLastRunSummary(`Completed ${step} actions`)
-      }
-
-      // 6. Post-Run Reflection — fire-and-forget, never blocks
-      void postRunReflection(run.id).catch(err => {
-        console.warn(`[PostRunReflection] Run ${run.id} reflection failed:`, err)
-      })
-
-      return { runId: run.id, status: 'completed' }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+      const { enqueueCoordinatorJob } = await import('./coordinator-producer')
+      await enqueueCoordinatorJob(
+        run.id,
+        agentId,
+        userId,
+        sessionId,
+        args,
+        args?.orgId as string ?? ''
+      )
+    } catch (err) {
+      console.error('[DurableRunner] Failed to enqueue coordinator job:', err)
       await updateRunStatus(run.id, 'failed')
-      return { runId: run.id, status: 'failed', error: errorMessage }
+      return { runId: run.id, status: 'failed', error: err instanceof Error ? err.message : String(err) }
     }
+
+    // 3. Return immediately — children run asynchronously on the BullMQ child worker.
+    //    The parent job processor coordinates via moveToWaitingChildren.
+    //    Caller can poll /runs/[runId] or subscribe to SSE for status updates.
+    return { runId: run.id, status: 'completed' }
   }
 
   async resume(runId: string): Promise<RunResult> {
@@ -408,5 +380,164 @@ export class DurableRunner implements Runner {
       subject: (payload.subject as string) ?? '',
       snippet: payload.snippet as string | undefined,
     })
+  }
+
+  /**
+   * Returns a LaneEventEmitter for the given team.
+   * Used by executeTeam() to emit lane events as workers run.
+   */
+  getLaneEmitter(teamId: string) {
+    // Lazy import to avoid circular dependency
+    const { getLaneEmitter: _getLaneEmitter } = require('@/lib/runtime/lane-events')
+    return _getLaneEmitter(teamId)
+  }
+
+  /**
+   * Fork an existing session, creating a new child session with fresh ULID.
+   * Copies messages from the parent and records lineage via parent_session_id.
+   *
+   * Used by executeTeam() when spawning a worker — each worker gets its own
+   * isolated session forked from the Team Lead's coordinator session.
+   */
+  forkSession(sessionId: string, branchName?: string): Session {
+    throw new Error('forkSession not yet implemented - pending Unit B')
+  }
+
+  /**
+   * Create a new sidechain transcript for a task_id.
+   * The sidechain stores the worker agent's full reasoning trace separately
+   * from the coordinator session — used for audit and accountability.
+   *
+   * Stored at: {dataDir}/sidechains/{task_id}.jsonl
+   */
+  createSidechain(taskId: string): SidechainTranscript {
+    throw new Error('createSidechain not yet implemented - pending Unit B')
+  }
+
+  /**
+   * Spawn a sandboxed worker subprocess for the given agent.
+   *
+   * The worker runs in an isolated namespace (on Linux via unshare) and
+   * communicates via lane events posted to the SSE endpoint.
+   *
+   * Used by executeTeam() fan-out loop to launch worker agents.
+   */
+  async spawnWorker(
+    agentId: string,
+    coordinatorSessionId: string
+  ): Promise<import('./worker-registry').Worker> {
+    throw new Error('spawnWorker not yet implemented - pending Unit C')
+  }
+
+  /**
+   * executeSingleAgent — run one agent in isolation and return its output artifact.
+   *
+   * Used by the coordinator-loop (Unit E) fan-out when executing a single agent
+   * in a team. The agent runs with the given prompt and upstream context, and
+   * its final artifact is stored in the task_outputs table.
+   *
+   * @param options.agentId          — the agent to run
+   * @param options.prompt           — user prompt (may include upstream artifact context)
+   * @param options.upstreamArtifact — artifact from upstream agent to inject into prompt
+   * @returns the agent's output artifact (from the task_outputs table)
+   */
+  async executeSingleAgent(options: SingleAgentOptions): Promise<unknown> {
+    const { agentId, userId, sessionId = `sess-${ulid()}`, prompt, upstreamArtifact } = options
+
+    // Build the user message — inject upstream artifact if present
+    const artifactSection = upstreamArtifact
+      ? `\n\n## Context from previous step\n${JSON.stringify(upstreamArtifact, null, 2)}`
+      : ''
+    const userMessage = prompt
+      ? `${prompt}${artifactSection}`
+      : artifactSection || 'Begin.'
+
+    // Run the agent — execute() returns RunResult but artifacts are stored in task_outputs
+    await this.execute({
+      agentId,
+      userId: userId ?? 'system',
+      sessionId,
+      args: { prompt: userMessage },
+      elapsedMs: 0,
+    })
+
+    // Read the artifact from task_outputs (written by upsertTaskOutput after agent completes)
+    const { getTaskOutput } = await import('../db/queries')
+    const artifact = await getTaskOutput(agentId)
+    return artifact
+  }
+
+  /**
+   * executeTeam — fan-out execute all agents in a team via canvas wires.
+   *
+   * Loads the team graph (agents + wires) from the canvas DB, then runs
+   * runCoordinator which handles:
+   *   - Topological ordering (root agents first)
+   *   - MAX_CONCURRENT=2 worker slots
+   *   - Downstream enqueue when all upstream tasks complete
+   *   - Wire artifact passing between agents
+   *   - Lane event emission for SSE stream
+   *
+   * @param teamId — the team to execute (from teams DB table)
+   */
+  async executeTeam(teamId: string): Promise<void> {
+    const { runCoordinator } = await import('./coordinator-loop')
+    const { getCanvas, getAgent, updateTeamStatus, createTask, listTasks, getTeam } = await import('../db/queries')
+    const laneEmitter = this.getLaneEmitter(teamId)
+
+    const team = await getTeam(teamId)
+    if (!team) throw new Error(`Team not found: ${teamId}`)
+
+    const canvas = await getCanvas(team.canvas_id)
+    if (!canvas) throw new Error(`Canvas not found: ${team.canvas_id}`)
+
+    // Parse agents from canvas.agents_json
+    let agentsJson: import('./coordinator-loop').CanvasAgent[] = []
+    try {
+      agentsJson = JSON.parse(canvas.agents_json) as import('./coordinator-loop').CanvasAgent[]
+    } catch {
+      throw new Error(`Invalid agents_json in canvas ${team.canvas_id}`)
+    }
+
+    // Hydrate full agent records from DB (to get config, tools, role, etc.)
+    const agents: import('./coordinator-loop').CanvasAgent[] = []
+    for (const agentJson of agentsJson) {
+      const dbAgent = await getAgent(agentJson.id)
+      if (!dbAgent) continue
+      agents.push({
+        id: dbAgent.id,
+        name: dbAgent.name,
+        role: dbAgent.role,
+        tools: (dbAgent.config?.tools as string[]) ?? [],
+        config: dbAgent.config as Record<string, unknown> ?? {},
+      })
+    }
+
+    // Ensure all agents have a task record
+    const existingTasks = await listTasks(teamId)
+    const taskAgentIds = new Set(existingTasks.map(t => t.agent_id))
+    for (const agent of agents) {
+      if (!taskAgentIds.has(agent.id)) {
+        await createTask({ team_id: teamId, agent_id: agent.id })
+      }
+    }
+
+    await updateTeamStatus(teamId, 'running')
+
+    await runCoordinator({
+      teamId,
+      agents,
+      onAgentStart(agentId) {
+        laneEmitter.started(agentId, agentId)
+      },
+      onAgentComplete(agentId, artifact) {
+        laneEmitter.completed(agentId, agentId, artifact)
+      },
+      onAgentError(agentId, err) {
+        laneEmitter.failed(agentId, agentId, err.message)
+      },
+    })
+
+    await updateTeamStatus(teamId, 'completed')
   }
 }
