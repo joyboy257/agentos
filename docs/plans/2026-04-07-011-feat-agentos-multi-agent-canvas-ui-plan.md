@@ -122,7 +122,7 @@ Team Lead node (isCoordinator=true):
 
 ## Implementation Units
 
-- [ ] **Unit 1: Team Activate API — wire `executeTeam` to a REST endpoint**
+- [x] **Unit 1: Team Activate API — wire `executeTeam` to a REST endpoint**
 
 **Goal:** Create `POST /api/teams/[teamId]/activate` that calls `DurableRunner.executeTeam(teamId)`. This is the entry point that starts the multi-agent fan-out from the canvas.
 
@@ -155,7 +155,7 @@ Team Lead node (isCoordinator=true):
 
 ---
 
-- [ ] **Unit 2: Canvas — load team on canvas load, wire Activate to Team Lead node**
+- [x] **Unit 2: Canvas — load team on canvas load, wire Activate to Team Lead node**
 
 **Goal:** When `loadCanvas(canvasId)` is called, also load the associated team and set `teamId` in CanvasProvider. Wire a "Run Team" button on the Team Lead node (or canvas toolbar) to call `POST /api/teams/[teamId]/activate`.
 
@@ -201,7 +201,7 @@ loadCanvas(id) → setCurrentCanvasId → fetch /api/canvases/[id] → hydrate n
 
 ---
 
-- [ ] **Unit 3: Team Lead Node — per-worker health dots driven by `teamMembers` Map**
+- [x] **Unit 3: Team Lead Node — per-worker health dots driven by `teamMembers` Map**
 
 **Goal:** The Team Lead node's health dots (and "Coordinating N workers" subtitle) reflect actual worker statuses from the `teamMembers` Map updated by lane event subscriptions.
 
@@ -247,7 +247,7 @@ setTeamMembers(prev => {
 
 ---
 
-- [ ] **Unit 4: BullMQ FlowProducer path — wire `enqueueCoordinatorJob` into `executeTeam`**
+- [x] **Unit 4: BullMQ FlowProducer path — wire `enqueueCoordinatorJob` into `executeTeam`**
 
 **Goal:** `executeTeam` currently calls `runCoordinator` (in-process fan-out). Wire the BullMQ `FlowProducer` path via `enqueueCoordinatorJob` so multi-agent runs survive server restarts. The in-process path remains for single-agent runs.
 
@@ -284,7 +284,7 @@ setTeamMembers(prev => {
 
 ---
 
-- [ ] **Unit 5: Wire error propagation — `lane.failed` → `lane_blocked` SSE → `EscalationCard` with `teamContext`**
+- [x] **Unit 5: Wire error propagation — `lane.failed` → `lane_blocked` SSE → `EscalationCard` with `teamContext`**
 
 **Goal:** When a worker fails (`lane.failed`), `evaluateEscalation` recommends escalation and `EscalationCard` appears with the worker's identity, task ID, and blast radius. This is partially wired in `InfiniteCanvas` but `teamContext` may be incomplete.
 
@@ -317,7 +317,7 @@ setTeamMembers(prev => {
 
 ---
 
-- [ ] **Unit 6: Node status badge — `waiting` state for workers blocked on upstream dependencies**
+- [x] **Unit 6: Node status badge — `waiting` state for workers blocked on upstream dependencies**
 
 **Goal:** When a worker is in the `queue` (waiting for upstream agents to complete), the canvas node should show `status: 'waiting'` with a "Needs input" badge — matching the existing `waiting` status UI in `AgentNode`. The coordinator-loop already tracks `queue` state in memory but doesn't emit a `lane.waiting` event. Add it.
 
@@ -349,7 +349,7 @@ setTeamMembers(prev => {
 
 ---
 
-- [ ] **Unit 7: Canvas page — add team selector / "My Team" header**
+- [x] **Unit 7: Canvas page — add team selector / "My Team" header**
 
 **Goal:** When a canvas has a team, show a "My Team" header or badge on the canvas page so Maria knows she's looking at a team canvas, not a single-agent canvas.
 
