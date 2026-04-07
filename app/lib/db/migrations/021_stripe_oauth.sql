@@ -1,0 +1,10 @@
+-- 021: Stripe Integration
+-- Stripe uses API key authentication (STRIPE_SECRET_KEY env var), not OAuth.
+-- This migration documents the integration pattern; credentials are stored in env vars.
+--
+-- Env vars required:
+--   STRIPE_SECRET_KEY         — Stripe secret key (sk_live_... or sk_test_...)
+--   NEXT_PUBLIC_APP_URL       — Base URL for payment link redirect (e.g. https://app.agentos.ai)
+--
+-- The encrypted_credentials table is NOT used for Stripe since API keys are server-side only.
+-- Stripe webhook endpoints handle payment events server-side.

@@ -118,6 +118,19 @@ const TOOL_TIMEOUTS: Record<string, number> = {
   'calendar.events.list': 15_000,
   'calendar.events.get': 10_000,
   'calendar.availability.get': 15_000,
+  'stripe.payments.list': 20_000,
+  'stripe.payments.get': 20_000,
+  'stripe.payment_link.create': 30_000,
+  'stripe.invoices.send': 30_000,
+  // QuickBooks
+  'quickbooks.invoices.list': 30_000,
+  'quickbooks.invoices.get': 20_000,
+  'quickbooks.customers.list': 30_000,
+  'quickbooks.invoices.create': 30_000,
+  'quickbooks.invoices.send': 20_000,
+  'quickbooks.invoices.record_payment': 20_000,
+  // Twilio
+  'twilio.sms.send': 15_000,
 }
 
 /**

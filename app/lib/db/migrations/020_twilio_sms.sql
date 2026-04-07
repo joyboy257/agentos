@@ -1,0 +1,3 @@
+-- 020: Twilio SMS credentials
+-- Twilio uses API key + auth token (no OAuth), stored in env vars
+-- but we create a placeholder credential record per user to track connection status

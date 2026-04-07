@@ -136,6 +136,9 @@ export const circuitBreakers: Record<string, CircuitBreaker> = {
   llm: createCircuitBreaker('llm', { threshold: 10, resetTimeoutMs: 60_000 }),
   'google-calendar': createCircuitBreaker('google-calendar', { threshold: 3, resetTimeoutMs: 30_000 }),
   calendar: createCircuitBreaker('calendar', { threshold: 3, resetTimeoutMs: 30_000 }),
+  stripe: createCircuitBreaker('stripe', { threshold: 3, resetTimeoutMs: 30_000 }),
+  twilio: createCircuitBreaker('twilio', { threshold: 3, resetTimeoutMs: 30_000 }),
+  quickbooks: createCircuitBreaker('quickbooks', { threshold: 3, resetTimeoutMs: 30_000 }),
 }
 
 /**
