@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css'
 
 import { CanvasProvider, useCanvas } from './CanvasProvider'
 import AgentNode from './AgentNode'
+import { TeamLeadNode } from './TeamLeadNode'
 import LabeledEdge from './LabeledEdge'
 import { NodeDetailPanel } from './NodeDetailPanel'
 import { NLPromptBar } from './NLPromptBar'
@@ -29,6 +30,7 @@ import type { ApprovalRequiredEvent } from '@/lib/tracing/event-schema'
 
 const nodeTypes = {
   agent: AgentNode,
+  teamlead: TeamLeadNode,
 }
 
 const edgeTypes = {
@@ -60,10 +62,11 @@ function FitViewButton() {
 }
 
 function CanvasContent() {
-  const { nodes, edges, setSelectedNodeId, addGraphAgents, setActiveEscalationId, selectedNode } = useCanvas()
+  const { nodes, edges, setSelectedNodeId, addGraphAgents, setActiveEscalationId, selectedNode, currentCanvasId, teamId, subscribeToLaneEvents } = useCanvas()
   const [activeEscalation, setActiveEscalationLocal] = useState<EscalationData | null>(null)
   const [isTraceOpen, setIsTraceOpen] = useState(false)
   const [traceRunId, setTraceRunId] = useState<string | null>(null)
+  const [teamRunning, setTeamRunning] = useState(false)
 
   const onConnect = useCallback(async (connection: Connection) => {
     if (!connection.source || !connection.target) return
@@ -115,6 +118,27 @@ function CanvasContent() {
             (event.content.fields ?? []).map((f: { name: string; value: unknown }) => [f.name, f.value])
           ),
         })
+      } else if (sseEvent.type === 'lane_blocked') {
+        // Team escalation — lane blocked event from worker
+        const event = sseEvent.data as { task_id: string; agent_id: string; team_id: string; payload?: { reason?: string; artifact?: unknown } }
+        setActiveEscalation(event.task_id, event.team_id)
+        setActiveEscalationLocal({
+          approvalId: event.task_id,
+          runId: event.team_id,
+          toolCallId: event.task_id,
+          agentName: event.agent_id,
+          summary: event.payload?.reason ?? 'Worker blocked — needs your input',
+          toolName: 'tool',
+          args: { blast_radius: event.payload?.artifact },
+          teamContext: {
+            workerName: event.agent_id,
+            taskId: event.task_id,
+            teamId: event.team_id,
+            blastRadius: typeof event.payload?.artifact === 'object'
+              ? JSON.stringify(event.payload.artifact)
+              : undefined,
+          },
+        })
       } else if (sseEvent.type === 'approval_resolved') {
         clearActiveEscalation()
         setActiveEscalationId(null)
@@ -145,21 +169,37 @@ function CanvasContent() {
     return () => document.removeEventListener('open-reasoning-panel', handleOpenReasoningPanel)
   }, [])
 
+  // Unit F: subscribe to lane events when a teamId is set
+  useEffect(() => {
+    if (!teamId) return
+    const unsub = subscribeToLaneEvents(teamId)
+    return unsub
+  }, [teamId, subscribeToLaneEvents])
+
   const handleActivate = (result: NLToCanvasResult) => {
+    const agents = result.graph.agents.map(a => ({
+      id: a.id,
+      name: a.name,
+      role: 'worker',
+      archetype: a.archetype,
+      tools: a.tools,
+      description: a.description,
+      position_x: a.position_x,
+      position_y: a.position_y,
+    }))
     // Add the interpreted agents + connections to the canvas
     addGraphAgents(
-      result.graph.agents.map(a => ({
-        id: a.id,
-        name: a.name,
-        role: 'worker',
-        archetype: a.archetype,
-        tools: a.tools,
-        description: a.description,
-        position_x: a.position_x,
-        position_y: a.position_y,
-      })),
+      agents,
       result.graph.connections.map(c => ({ source: c.source, target: c.target }))
     )
+    // Persist agents to the DB
+    if (agents.length > 0) {
+      fetch('/api/agents/from-nl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agents, canvasId: currentCanvasId ?? undefined }),
+      }).catch(err => console.error('[InfiniteCanvas] failed to persist agents:', err))
+    }
   }
 
   // Listen for nl-palette-activate events from the canvas page's command palette
@@ -176,6 +216,25 @@ function CanvasContent() {
   const handleTriggerEscalation = () => {
     setActiveEscalation(DEMO_ESCALATION.approvalId, DEMO_ESCALATION.runId)
     setActiveEscalationLocal(DEMO_ESCALATION)
+  }
+
+  // Run Team — activates the multi-agent fan-out via BullMQ
+  const handleRunTeam = async () => {
+    if (!teamId) return
+    setTeamRunning(true)
+    try {
+      const res = await fetch(`/api/teams/${teamId}/activate`, { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json()
+        console.error('[InfiniteCanvas] Run Team failed:', err.error)
+      }
+    } catch (err) {
+      console.error('[InfiniteCanvas] Run Team error:', err)
+    } finally {
+      // Keep teamRunning true while team is active; lane events will update node status
+      // Reset after a delay as a fallback (team should update via SSE eventually)
+      setTimeout(() => setTeamRunning(false), 30_000)
+    }
   }
 
   const handleApprove = async () => {
@@ -227,6 +286,22 @@ function CanvasContent() {
     setActiveEscalationLocal(null)
   }
 
+  const handleSkip = async () => {
+    if (!activeEscalation) return
+    await fetch(`/api/approvals/${activeEscalation.approvalId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        runId: activeEscalation.runId,
+        toolCallId: activeEscalation.toolCallId,
+        decision: 'skipped',
+      }),
+    })
+    clearActiveEscalation()
+    setActiveEscalationId(null)
+    setActiveEscalationLocal(null)
+  }
+
   return (
     <div
       style={{
@@ -269,6 +344,46 @@ function CanvasContent() {
 
       <NLPromptBar teamId="team-1" onActivate={handleActivate} onCancel={() => {}} />
 
+      {/* Run Team button — appears when a team is loaded */}
+      {teamId && (
+        <button
+          onClick={handleRunTeam}
+          disabled={teamRunning}
+          title={teamRunning ? 'Team is running...' : 'Run all agents in this team'}
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 16,
+            background: teamRunning ? '#6366f1' : '#22c55e',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            padding: '8px 16px',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: teamRunning ? 'not-allowed' : 'pointer',
+            opacity: teamRunning ? 0.7 : 1,
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          }}
+        >
+          {teamRunning ? (
+            <>
+              <span style={{ animation: 'pulse 1.5s ease-in-out infinite', width: 8, height: 8, borderRadius: '50%', background: '#fff', display: 'inline-block' }} />
+              Running...
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 16 }}>▶</span>
+              Run Team
+            </>
+          )}
+        </button>
+      )}
+
       {/* Debug escalation trigger — bottom-right corner */}
       <button
         onClick={handleTriggerEscalation}
@@ -300,7 +415,9 @@ function CanvasContent() {
           args={activeEscalation.args}
           onApprove={handleApprove}
           onEdit={handleEdit}
+          onSkip={handleSkip}
           onCancel={handleCancel}
+          teamContext={activeEscalation.teamContext}
         />
       )}
 
