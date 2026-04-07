@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest",
+    "test:run": "vitest --run"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.67",

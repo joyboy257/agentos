@@ -94,7 +94,7 @@ interface AnthropicStreamEvent {
 // Tool execution dispatch — wires real tools via capability registry
 // ---------------------------------------------------------------------------
 
-const TOOL_TIMEOUTS: Record<string, number> = {
+export const TOOL_TIMEOUTS: Record<string, number> = {
   'web.search': 15_000,
   'hubspot.contacts.list': 30_000,
   'hubspot.contacts.search': 30_000,

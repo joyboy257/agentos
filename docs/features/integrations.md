@@ -36,21 +36,21 @@ These complete the core loop. Without them the agent can't do full employee task
 
 | # | Integration | Type | Priority | Status |
 |---|-----------|------|----------|--------|
-| 4 | **HubSpot CRM** | CRM | 🟠 High | 🔴 Not started |
-| 5 | **Google Calendar** | Calendar | 🟠 High | 🔴 Not started |
-| 6 | **Slack** | Communication | 🟠 High | 🔴 Not started |
+| 4 | **HubSpot CRM** | CRM | 🟠 High | ✅ Done (OAuth + read/write tools) |
+| 5 | **Google Calendar** | Calendar | 🟠 High | ✅ Done (OAuth + read/write tools) |
+| 6 | **Slack** | Communication | 🟠 High | ✅ Done (OAuth + read/write + notification transport) |
 
 ### Tier 3 — Small Business Pack (Phase 2)
 These address the back office and the tools that run a $500K–$2M HVAC business.
 
 | # | Integration | Type | Priority | Status |
 |---|-----------|------|----------|--------|
-| 7 | **QuickBooks Online** | Accounting | 🟡 Medium | 🔴 Not started |
-| 8 | **Google Calendar** | Scheduling | 🟡 Medium | 🔴 Not started (blocked by #5) |
-| 9 | **Instagram Business** | Social | 🟡 Medium | 🔴 Not started |
-| 10 | **Twilio SMS** | SMS | 🟡 Medium | 🔴 Not started |
-| 11 | **Stripe** | Payments | 🟡 Medium | 🔴 Not started |
-| 12 | **Square** | Payments | 🟡 Medium | 🔴 Not started |
+| 7 | **QuickBooks Online** | Accounting | 🟡 Medium | ✅ Done (OAuth + read/write tools) |
+| 8 | **Twilio SMS** | SMS | 🟡 Medium | ✅ Done (API key + sms.send tool) |
+| 9 | **Stripe** | Payments | 🟡 Medium | ✅ Done (payment links + invoice workflow wiring) |
+| 10 | **Instagram Business** | Social | 🟡 Medium | 🔴 Not started |
+| 11 | **Square** | Payments | 🟡 Medium | 🔴 Not started |
+| 12 | **Calendly** | Scheduling | 🟡 Medium | 🔴 Not started |
 
 ### Tier 4 — Nice to Have (Phase 3+)
 Enterprise features that unlock bigger clients but aren't the core market.
@@ -60,11 +60,10 @@ Enterprise features that unlock bigger clients but aren't the core market.
 | 13 | **Salesforce** | CRM | 🟢 Low | 🔴 Not started |
 | 14 | **Microsoft Teams** | Communication | 🟢 Low | 🔴 Not started |
 | 15 | **Xero** | Accounting | 🟢 Low | 🔴 Not started |
-| 16 | **Calendly** | Scheduling | 🟢 Low | 🔴 Not started |
-| 17 | **Facebook Page** | Social | 🟢 Low | 🔴 Not started |
-| 18 | **Jira** | Project | 🟢 Low | 🔴 Not started |
-| 19 | **GitHub** | Dev | 🟢 Low | 🔴 Not started |
-| 20 | **Notion** | Docs | 🟢 Low | 🔴 Not started |
+| 16 | **Facebook Page** | Social | 🟢 Low | 🔴 Not started |
+| 17 | **Jira** | Project | 🟢 Low | 🔴 Not started |
+| 18 | **GitHub** | Dev | 🟢 Low | 🔴 Not started |
+| 19 | **Notion** | Docs | 🟢 Low | 🔴 Not started |
 
 ---
 
@@ -160,43 +159,50 @@ Integration calls are checkpointed before firing. If the server restarts mid-cal
 
 ---
 
-### Tier 3 — Planned
+### Tier 3 — Small Business Pack (in progress)
 
 #### QuickBooks Online
 - **Permission level:** `needs_approval` (write), `safe` (read)
 - **Auth:** OAuth 2.0 (Intuit)
-- **Read tools:** list invoices, list customers, get invoice status
-- **Write tools:** create invoice, send invoice, record payment
+- **Status:** ✅ Done
+- **Read tools:** `quickbooks.invoices.list`, `quickbooks.invoices.get`, `quickbooks.customers.list`
+- **Write tools:** `quickbooks.invoices.create`, `quickbooks.invoices.send`, `quickbooks.invoices.record_payment`
 - **Key actions for Maria:**
   - "Create and send an invoice for the Rodriguez job — $850, due net 30"
   - "Mark invoice #1043 as paid when payment comes through"
   - "Pull all outstanding invoices over 60 days"
 
+#### Twilio SMS
+- **Permission level:** `needs_approval`
+- **Auth:** API key + secret (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`)
+- **Status:** ✅ Done
+- **Write tools:** `twilio.sms.send`
+- **Key actions for Maria:**
+  - "Send an SMS to the Rodriguez cell: 'Technician arriving between 2-4pm today.'"
+  - "SMS James: 'Lead alert — $12K commercial job in Scottsdale, call by 5pm.'"
+- **Cross-wired from:** HubSpot deal alerts, Stripe invoice notifications
+
+#### Stripe
+- **Permission level:** `needs_approval`
+- **Auth:** API key (`STRIPE_SECRET_KEY`)
+- **Status:** ✅ Done
+- **Read tools:** `stripe.payments.list`, `stripe.payments.get`
+- **Write tools:** `stripe.payment_link.create`, `stripe.invoices.send`
+- **Key actions for Maria:**
+  - "Generate a Stripe payment link for the Martinez deposit — $400"
+  - "Check if invoice #1042 has been paid"
+- **Cross-wired from:** QuickBooks invoice creation
+- **Cross-wires out:** payment received → HubSpot Closed Won + Maria SMS via Twilio; invoice sent → customer SMS via Twilio
+
 #### Instagram Business
 - **Permission level:** `needs_approval`
 - **Auth:** OAuth 2.0 (Meta)
+- **Status:** 🔴 Not started
 - **Read tools:** get recent posts, get insights
 - **Write tools:** create post, upload image
 - **Key actions for Maria:**
   - "Post a photo of today's install to Instagram with a thank-you caption"
   - "Draft a before/after post for the Martinez job and save it as a draft for my review"
-
-#### Twilio SMS
-- **Permission level:** `needs_approval`
-- **Auth:** API key + secret
-- **Write tools:** send_sms
-- **Key actions for Maria:**
-  - "Send an SMS to the Rodriguez cell: 'Technician arriving between 2-4pm today. Reply HELP if you need to reschedule.'"
-  - "SMS James: 'Lead alert — $12K commercial job in Scottsdale, call by 5pm.'"
-
-#### Stripe
-- **Permission level:** `needs_approval`
-- **Auth:** API key (restricted mode)
-- **Read tools:** list payments, get customer balance
-- **Write tools:** create payment link, send invoice
-- **Key actions for Maria:**
-  - "Generate a Stripe payment link for the Martinez deposit — $400"
-  - "Check if invoice #1042 has been paid"
 
 #### Square
 - **Permission level:** `needs_approval`
@@ -212,7 +218,7 @@ Integration calls are checkpointed before firing. If the server restarts mid-cal
 ## Build Order
 
 ```
-Phase 1.1 (current sprint):
+Phase 1.1 (✅ complete):
   1. HubSpot OAuth — credential infrastructure + read tools
   2. HubSpot write tools — create/update CRM records
   3. Google Calendar OAuth — credential infrastructure + read tools
@@ -220,16 +226,20 @@ Phase 1.1 (current sprint):
   5. Slack OAuth + read tools
   6. Slack write tools + notification routing
 
-Phase 2 (next):
+Phase 1.2 (✅ complete):
   7. QuickBooks Online OAuth + read
   8. QuickBooks Online write
-  9. Twilio SMS — simple send only (no OAuth, API key-based)
-  10. Instagram Business OAuth + read
-  11. Instagram write (posts)
-  12. Stripe — payment link generation + invoice check
+  9. Twilio SMS — API key-based
+  10. Stripe — payment link generation + invoice workflow
+
+Phase 2 (next):
+  11. Instagram Business OAuth + read
+  12. Instagram write (post drafts)
+  13. Square OAuth + read/write
+  14. Calendly OAuth + availability check
 
 Phase 3:
-  13–20. Remaining integrations as needed for enterprise / larger clients
+  15–20. Remaining integrations (Salesforce, Teams, Xero, Jira, GitHub, Notion)
 ```
 
 ---
