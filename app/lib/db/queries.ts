@@ -8,11 +8,11 @@ export async function createAgent(data: {
   name: string;
   role: Agent['role'];
   config?: Record<string, unknown>;
-  schedule?: string | null;
+  schedule?: string | null;  // stored as schedule_cron in DB
   budget_ms?: number | null;
 }): Promise<Agent> {
   const result = await sql`
-    INSERT INTO agents (user_id, name, role, config, schedule, budget_ms)
+    INSERT INTO agents (user_id, name, role, config, schedule_cron, budget_ms)
     VALUES (${data.user_id}, ${data.name}, ${data.role}, ${JSON.stringify(data.config ?? {})}, ${data.schedule ?? null}, ${data.budget_ms ?? null})
     RETURNING *
   `;
@@ -33,15 +33,46 @@ export async function updateAgentStatus(id: string, status: AgentStatus): Promis
   await sql`UPDATE agents SET status = ${status}, updated_at = NOW() WHERE id = ${id}`;
 }
 
+export async function pauseAgent(id: string, reason: 'budget_exhausted'): Promise<void> {
+  // reason parameter reserved for future pause types
+  if (reason === 'budget_exhausted') {
+    await sql`
+      UPDATE agents
+      SET status = 'paused_budget', paused_budget_at = NOW(), updated_at = NOW()
+      WHERE id = ${id}
+    `
+  }
+}
+
+export async function updateAgentBudget(id: string, budgetMs: number | null): Promise<void> {
+  await sql`UPDATE agents SET budget_ms = ${budgetMs}, updated_at = NOW() WHERE id = ${id}`
+}
+
 export async function deleteAgent(id: string): Promise<void> {
   await sql`DELETE FROM agents WHERE id = ${id}`;
 }
 
+export async function updateAgentSchedule(id: string, scheduleCron: string | null): Promise<void> {
+  await sql`UPDATE agents SET schedule_cron = ${scheduleCron}, updated_at = NOW() WHERE id = ${id}`;
+}
+
+/**
+ * List all agents that have a schedule_cron set.
+ */
+export async function listAgentsWithSchedules(): Promise<Agent[]> {
+  const result = await sql`SELECT * FROM agents WHERE schedule_cron IS NOT NULL ORDER BY created_at DESC`;
+  return result.rows as Agent[];
+}
+
 // --- RUNS ---
-export async function createRun(data: { agent_id: string; user_id: string }): Promise<Run> {
+export async function createRun(data: {
+  agent_id: string;
+  user_id: string;
+  triggered_by?: 'manual' | 'proactive' | 'webhook';
+}): Promise<Run> {
   const result = await sql`
-    INSERT INTO runs (agent_id, user_id, status)
-    VALUES (${data.agent_id}, ${data.user_id}, 'running')
+    INSERT INTO runs (agent_id, user_id, status, triggered_by)
+    VALUES (${data.agent_id}, ${data.user_id}, 'running', ${data.triggered_by ?? 'manual'})
     RETURNING *
   `;
   return result.rows[0] as Run;

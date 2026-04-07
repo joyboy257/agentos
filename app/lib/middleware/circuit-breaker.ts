@@ -139,6 +139,7 @@ export const circuitBreakers: Record<string, CircuitBreaker> = {
   stripe: createCircuitBreaker('stripe', { threshold: 3, resetTimeoutMs: 30_000 }),
   twilio: createCircuitBreaker('twilio', { threshold: 3, resetTimeoutMs: 30_000 }),
   quickbooks: createCircuitBreaker('quickbooks', { threshold: 3, resetTimeoutMs: 30_000 }),
+  instagram: createCircuitBreaker('instagram', { threshold: 3, resetTimeoutMs: 30_000 }),
 }
 
 /**

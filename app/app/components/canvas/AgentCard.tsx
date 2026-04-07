@@ -208,9 +208,9 @@ export function AgentCard({ data }: AgentCardProps) {
                     width: `${Math.min(data.budgetUsedPercent, 100)}%`,
                     height: '100%',
                     background:
-                      data.budgetUsedPercent > 90
+                      data.budgetUsedPercent > 80
                         ? '#ef4444'
-                        : data.budgetUsedPercent > 70
+                        : data.budgetUsedPercent > 50
                         ? '#f59e0b'
                         : '#22c55e',
                     borderRadius: 3,
@@ -218,6 +218,27 @@ export function AgentCard({ data }: AgentCardProps) {
                   }}
                 />
               </div>
+              {data.budgetUsedPercent > 80 && (
+                <a
+                  href="/settings/agents"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '6px 10px',
+                    background: 'none',
+                    border: '1px solid #ef4444',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#ef4444',
+                    textDecoration: 'none',
+                  }}
+                >
+                  Add budget
+                </a>
+              )}
             </div>
           )}
 

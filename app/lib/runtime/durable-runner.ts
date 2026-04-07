@@ -31,6 +31,7 @@ import { getAgentContext } from '../memory/memory-client'
 import type { ToolContext } from '../capability-registry/types'
 import { Session } from './session'
 import { SidechainTranscript } from './sidechain-transcript'
+import { pauseAgentForBudget } from './budget-pause'
 
 // ---------------------------------------------------------------------------
 // Helper — maps ReasoningEvent to existing hook events
@@ -266,8 +267,14 @@ export class DurableRunner implements Runner {
     // Budget enforcement callback — called when budget is exhausted
     const onBudgetExceeded = async (elapsed: number, budgetMs: number) => {
       console.warn(`[Budget] Agent ${agentId} exceeded budget: ${elapsed}ms / ${budgetMs}ms`)
-      // Pause agent in DB
-      await updateAgentStatus(agentId, 'paused_budget')
+      // Pause agent in DB, log activity, and send push notification
+      await pauseAgentForBudget({
+        agentId,
+        userId: context.userId,
+        agentName: agent.name,
+        budgetMs,
+        elapsedMs: elapsed,
+      })
       // Emit hook event for canvas UI
       void hooks.emit('budgetPaused', {
         runId,
