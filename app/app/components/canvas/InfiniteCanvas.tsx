@@ -44,8 +44,8 @@ function FitViewButton() {
       onClick={() => fitView({ padding: 0.2, duration: 400 })}
       title="Fit to view"
       style={{
-        background: '#ffffff',
-        border: '1px solid #e5e5e3',
+        background: '#12121a',
+        border: '1px solid #1e1e2e',
         borderRadius: 8,
         padding: '6px',
         cursor: 'pointer',
@@ -56,7 +56,7 @@ function FitViewButton() {
         height: 32,
       }}
     >
-      <Maximize2 size={14} color="#6b6b68" />
+      <Maximize2 size={14} color="#6b6b7b" />
     </button>
   )
 }
@@ -308,7 +308,7 @@ function CanvasContent() {
         width: '100%',
         height: '100%',
         position: 'relative',
-        background: '#f0f0ec',
+        background: '#0a0a0f',
       }}
     >
       <ReactFlow
@@ -321,19 +321,19 @@ function CanvasContent() {
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.25}
         maxZoom={2}
-        style={{
-          background: '#f0f0ec',
-        }}
+        style={{ background: '#0a0a0f' }}
       >
+        {/* Railway dot-grid background */}
         <Background
-          color="#d4d4d1"
-          gap={20}
+          color="#1e1e2e"
+          gap={28}
           size={1}
+          style={{ background: '#0a0a0f' }}
         />
         <Controls
           style={{
-            background: '#ffffff',
-            border: '1px solid #e5e5e3',
+            background: '#12121a',
+            border: '1px solid #1e1e2e',
             borderRadius: 8,
           }}
         >
@@ -344,7 +344,7 @@ function CanvasContent() {
 
       <NLPromptBar teamId="team-1" onActivate={handleActivate} onCancel={() => {}} />
 
-      {/* Run Team button — appears when a team is loaded */}
+      {/* Run Team button — Railway dark pill */}
       {teamId && (
         <button
           onClick={handleRunTeam}
@@ -354,30 +354,33 @@ function CanvasContent() {
             position: 'absolute',
             bottom: 16,
             left: 16,
-            background: teamRunning ? '#6366f1' : '#22c55e',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            padding: '8px 16px',
+            background: teamRunning ? '#1e1b4b' : '#12121a',
+            color: teamRunning ? '#a5b4fc' : '#2dd4bf',
+            border: `1px solid ${teamRunning ? '#6366f1' : '#2dd4bf'}`,
+            borderRadius: 9999,
+            padding: '8px 18px',
             fontSize: 13,
             fontWeight: 600,
             cursor: teamRunning ? 'not-allowed' : 'pointer',
-            opacity: teamRunning ? 0.7 : 1,
+            opacity: teamRunning ? 0.8 : 1,
             zIndex: 10,
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            gap: 8,
+            boxShadow: teamRunning ? 'none' : '0 0 16px rgba(45, 212, 191, 0.2)',
+            fontFamily: 'JetBrains Mono, monospace',
+            letterSpacing: '0.02em',
+            transition: 'all 150ms ease',
           }}
         >
           {teamRunning ? (
             <>
-              <span style={{ animation: 'pulse 1.5s ease-in-out infinite', width: 8, height: 8, borderRadius: '50%', background: '#fff', display: 'inline-block' }} />
+              <span style={{ animation: 'pulse 1.5s ease-in-out infinite', width: 8, height: 8, borderRadius: '50%', background: '#6366f1', display: 'inline-block' }} />
               Running...
             </>
           ) : (
             <>
-              <span style={{ fontSize: 16 }}>▶</span>
+              <span style={{ fontSize: 14, lineHeight: 1 }}>▶</span>
               Run Team
             </>
           )}

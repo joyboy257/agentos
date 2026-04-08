@@ -1,478 +1,479 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { AgentGraph, AgentStatusEvent, RunDoneEvent, RunErrorEvent } from '@/lib/nl/types'
-import { RunButton } from '@/components/run-button'
-import { ApprovalModal } from '@/components/approval-modal'
-import type { ApprovalRequiredEvent } from '@/lib/tracing/event-schema'
-import type { ReasoningSnapshot } from '@/lib/tracing/event-buffer'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ActiveApproval {
-  event: ApprovalRequiredEvent
-  snapshot: ReasoningSnapshot | null
-  summary: string
-  suggestions: Array<{ id: string; proposal_headline: string; proposal_detail: string }>
+interface Agent {
+  id: string
+  name: string
+  status: string
+  lastRunAt: string | null
+  runCountToday: number
+  escalatedCountToday: number
+  budgetUsedPercent: number
 }
 
-// ---------------------------------------------------------------------------
-// HomePage — integrated canvas + approval modal
-// ---------------------------------------------------------------------------
+interface RecentRun {
+  id: string
+  agentName: string
+  status: string
+  summary: string
+  startedAt: string | null
+}
 
 export default function HomePage() {
-  const [messages, setMessages] = useState<Array<{role: 'user' | 'bot', content: string}>>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [assembledGraph, setAssembledGraph] = useState<AgentGraph | null>(null)
-  const [agentStatuses, setAgentStatuses] = useState<Map<string, string>>(new Map())
-  const [activeApprovals, setActiveApprovals] = useState<ActiveApproval[]>([])
-  const [runId, setRunId] = useState<string | null>(null)
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [recentRuns, setRecentRuns] = useState<RecentRun[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Store pending approval args for edit mode (keyed by toolCallId)
-  const approvalArgsRef = useRef<Record<string, Record<string, unknown>>>({})
-
-  // ---------------------------------------------------------------------------
-  // SSE stream handler — manages full run lifecycle including approvals
-  // ---------------------------------------------------------------------------
-
-  // Listen for run_started events from RunButton to capture runId
   useEffect(() => {
-    const handler = (e: Event) => {
-      const runId = (e as CustomEvent<{ runId: string }>).detail.runId
-      setRunId(runId)
-    }
-    document.addEventListener('run-started', handler)
-    return () => document.removeEventListener('run-started', handler)
+    // Load dashboard data in parallel
+    Promise.all([
+      fetch('/api/agents').then(r => r.json()).catch(() => ({ agents: [] })),
+      fetch('/api/activity?limit=5').then(r => r.json()).catch(() => ({ runs: [] })),
+    ]).then(([agentsData, activityData]) => {
+      setAgents(agentsData.agents ?? [])
+      setRecentRuns(activityData.runs ?? [])
+      setLoading(false)
+    })
   }, [])
 
-  const handleRunStart = async (graph: AgentGraph) => {
-    setAgentStatuses(new Map())
-    setActiveApprovals([])
-    approvalArgsRef.current = {}
-
-    try {
-      const res = await fetch('/api/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ graph }),
-      })
-
-      if (!res.ok || !res.body) return
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        let i = 0
-        while (i < buffer.length) {
-          if (buffer.slice(i, i + 7) !== 'event: ') break
-          i += 7
-          const nl = buffer.indexOf('\n', i)
-          if (nl === -1) break
-          const eventType = buffer.slice(i, nl).trim()
-          i = nl + 1
-          if (buffer.slice(i, i + 6) !== 'data: ') break
-          i += 6
-          const dataEnd = buffer.indexOf('\n\n', i)
-          if (dataEnd === -1) break
-          const rawData = buffer.slice(i, dataEnd)
-          i = dataEnd + 2
-
-          try {
-            const data = JSON.parse(rawData)
-
-            if (eventType === 'status') {
-              const e = data as AgentStatusEvent
-              setAgentStatuses(s => new Map(s).set(e.agentId, e.status))
-            } else if (eventType === 'reasoning') {
-              // Unit 5a: reasoning events including approval_required
-              const e = data as { type: string }
-              if (e.type === 'approval_required') {
-                const approvalEvent = data as ApprovalRequiredEvent
-                setRunId(approvalEvent.runId)
-                const summary = approvalEvent.content.summary
-                const snapshot: ReasoningSnapshot | null = null
-
-                setActiveApprovals(prev => [
-                  ...prev,
-                  { event: approvalEvent, snapshot, summary, suggestions: [] },
-                ])
-
-                // Fetch suggestions for this run to show in the modal
-                const currentRunId = approvalEvent.runId
-                try {
-                  const res = await fetch(`/api/escalation-suggestions?runId=${currentRunId}`)
-                  if (res.ok) {
-                    const data = await res.json()
-                    setActiveApprovals(prev => prev.map(a =>
-                      a.event.content.toolCallId === approvalEvent.content.toolCallId
-                        ? { ...a, suggestions: data.suggestions ?? [] }
-                        : a
-                    ))
-                  }
-                } catch {
-                  // Suggestions are best-effort; don't fail the approval flow
-                }
-              }
-            } else if (eventType === 'done') {
-              const e = data as RunDoneEvent
-              setMessages(m => [...m, { role: 'bot', content: e.summary }])
-              setAgentStatuses(new Map())
-              setActiveApprovals([])
-              setRunId(null)
-              break
-            } else if (eventType === 'error') {
-              const e = data as RunErrorEvent
-              setMessages(m => [...m, { role: 'bot', content: `Error: ${e.message}` }])
-              setAgentStatuses(new Map())
-              setActiveApprovals([])
-              setRunId(null)
-              break
-            }
-          } catch {
-            // Malformed event — skip
-          }
-        }
-
-        if (!buffer.includes('event: ')) break
-        buffer = ''
-      }
-    } catch {
-      setMessages(m => [...m, { role: 'bot', content: 'Something went wrong. Please try again.' }])
-      setAgentStatuses(new Map())
-      setActiveApprovals([])
-      setRunId(null)
-    }
+  const statusColors: Record<string, string> = {
+    running: '#22c55e',
+    idle: '#a3a3a0',
+    stopped: '#a3a3a0',
+    scheduled: '#f59e0b',
+    error: '#ef4444',
+    waiting: '#60a5fa',
+    paused_budget: '#f59e0b',
   }
 
-  // ---------------------------------------------------------------------------
-  // Goal submission
-  // ---------------------------------------------------------------------------
-
-  const handleGoalSubmit = async (goal: string) => {
-    setMessages(m => [...m, { role: 'user', content: goal }])
-    setIsLoading(true)
-
-    try {
-      const res = await fetch('/api/assemble', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal })
-      })
-      const data = await res.json()
-
-      if (data.error) {
-        setMessages(m => [...m, { role: 'bot', content: data.message }])
-      } else if (data.clarification) {
-        setMessages(m => [...m, {
-          role: 'bot',
-          content: `${data.question}\n\n${data.options.map((o: any, i: number) => `${i+1}. ${o.label}`).join('\n')}`
-        }])
-      } else {
-        setAssembledGraph(data)
-        setMessages(m => [...m, {
-          role: 'bot',
-          content: `I'll set up a team for you: ${data.agents.map((a: any) => a.name).join(' → ')}`
-        }])
-      }
-    } catch {
-      setMessages(m => [...m, { role: 'bot', content: 'Something went wrong. Please try again.' }])
-    } finally {
-      setIsLoading(false)
-    }
+  const statusLabels: Record<string, string> = {
+    running: 'Running',
+    idle: 'Idle',
+    stopped: 'Stopped',
+    scheduled: 'Scheduled',
+    error: 'Error',
+    waiting: 'Waiting for input',
+    paused_budget: 'Budget exceeded',
   }
 
-  // ---------------------------------------------------------------------------
-  // Approval resolution
-  // ---------------------------------------------------------------------------
-
-  const handleApprove = async (
-    approvalId: string,
-    toolCallId: string,
-    revisedArgs?: Record<string, unknown>
-  ) => {
-    if (!runId) return
-
-    try {
-      await fetch(`/api/approvals/${approvalId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          runId,
-          toolCallId,
-          decision: revisedArgs ? 'edited' : 'approved',
-          revisedArgs,
-        }),
-      })
-
-      setActiveApprovals(prev => prev.filter(a => a.event.content.toolCallId !== toolCallId))
-    } catch (err) {
-      console.error('Failed to resolve approval:', err)
-    }
-  }
-
-  const handleCancel = async (approvalId: string, toolCallId: string) => {
-    if (!runId) return
-
-    try {
-      await fetch(`/api/approvals/${approvalId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          runId,
-          toolCallId,
-          decision: 'cancelled',
-        }),
-      })
-
-      setActiveApprovals(prev => prev.filter(a => a.event.content.toolCallId !== toolCallId))
-    } catch (err) {
-      console.error('Failed to cancel approval:', err)
-    }
-  }
-
-  const handleDismissApproval = (approvalId: string) => {
-    setActiveApprovals(prev => prev.filter(a => a.event.content.toolCallId !== approvalId))
-  }
-
-  const handleSuggestionAccept = async (approvalToolCallId: string, suggestionId: string) => {
-    if (!runId) return
-    try {
-      const res = await fetch('/api/escalation-suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: suggestionId, action: 'accepted' }),
-      })
-      if (!res.ok) throw new Error('Failed to accept suggestion')
-      setActiveApprovals(prev => prev.map(a =>
-        a.event.content.toolCallId === approvalToolCallId
-          ? { ...a, suggestions: a.suggestions.filter(s => s.id !== suggestionId) }
-          : a
-      ))
-    } catch (err) {
-      console.error('Failed to accept suggestion:', err)
-    }
-  }
-
-  const handleSuggestionDismiss = async (approvalToolCallId: string, suggestionId: string) => {
-    if (!runId) return
-    try {
-      const res = await fetch('/api/escalation-suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: suggestionId, action: 'dismissed' }),
-      })
-      if (!res.ok) throw new Error('Failed to dismiss suggestion')
-      setActiveApprovals(prev => prev.map(a =>
-        a.event.content.toolCallId === approvalToolCallId
-          ? { ...a, suggestions: a.suggestions.filter(s => s.id !== suggestionId) }
-          : a
-      ))
-    } catch (err) {
-      console.error('Failed to dismiss suggestion:', err)
-    }
-  }
-
-  const handleRunDone = (e: RunDoneEvent) => {
-    setMessages(m => [...m, { role: 'bot', content: e.summary }])
-    setAgentStatuses(new Map())
-    setAssembledGraph(null)
-    setActiveApprovals([])
-    setRunId(null)
-  }
-
-  const handleRunError = (e: RunErrorEvent) => {
-    setMessages(m => [...m, { role: 'bot', content: `Error: ${e.message}` }])
-  }
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  const activeCount = agents.filter(a => a.status === 'running').length
+  const idleCount = agents.filter(a => a.status === 'idle').length
+  const escalatedToday = agents.reduce((acc, a) => acc + (a.escalatedCountToday ?? 0), 0)
 
   return (
-    <div className="app-container">
-      <div className="chat-panel">
-        <div className="messages">
-          {messages.map((m, i) => (
-            <div key={i} className={`message message-${m.role}`}>
-              {m.content}
-            </div>
-          ))}
-          {isLoading && <div className="message message-bot">Thinking...</div>}
+    <div
+      style={{
+        flex: 1,
+        overflowY: 'auto',
+        background: 'var(--ui-bg)',
+        minHeight: '100vh',
+      }}
+    >
+      {/* ── Header ──────────────────────────────────────────── */}
+      <div
+        style={{
+          padding: '32px 40px 24px',
+          borderBottom: '1px solid var(--ui-border)',
+          background: 'var(--ui-surface)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: "'IBM Plex Serif', Georgia, serif",
+                fontSize: 28,
+                fontWeight: 700,
+                color: 'var(--ui-text)',
+                letterSpacing: '-0.02em',
+                margin: 0,
+                lineHeight: 1.2,
+              }}
+            >
+              Good morning, Maria.
+            </h1>
+            <p
+              style={{
+                margin: '6px 0 0',
+                fontSize: 15,
+                color: 'var(--ui-text-secondary)',
+              }}
+            >
+              Here's what your agents are up to today.
+            </p>
+          </div>
+          <Link
+            href="/canvas"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 20px',
+              background: 'var(--ui-accent)',
+              color: '#fff',
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: 'none',
+              boxShadow: '0 2px 8px rgba(91, 79, 233, 0.3)',
+              transition: 'background 0.15s, box-shadow 0.15s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'var(--ui-accent-hover)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(91, 79, 233, 0.4)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'var(--ui-accent)'
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(91, 79, 233, 0.3)'
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="1" width="5.5" height="5.5" rx="1.25" />
+              <rect x="8.5" y="1" width="5.5" height="5.5" rx="1.25" />
+              <rect x="1" y="8.5" width="5.5" height="5.5" rx="1.25" />
+              <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.25" />
+            </svg>
+            Open Canvas
+          </Link>
         </div>
-        <form onSubmit={(e) => {
-          e.preventDefault()
-          const input = (e.target as HTMLFormElement).elements.namedItem('goal') as HTMLInputElement
-          if (input.value.trim()) {
-            handleGoalSubmit(input.value.trim())
-            input.value = ''
-          }
-        }} className="input-form">
-          <input name="goal" placeholder="What would you like to do?" className="goal-input" />
-          <button type="submit" disabled={isLoading}>Send</button>
-        </form>
-      </div>
 
-      <div className="canvas-panel">
-        {assembledGraph ? (
-          <div className="graph-view">
-            {assembledGraph.agents.map(agent => {
-              const status = agentStatuses.get(agent.id) || 'pending'
-              const isWaiting = status === 'waiting'
-              return (
-                <div key={agent.id} className={`agent-node agent-${agent.role}${isWaiting ? ' agent-waiting' : ''}`}>
-                  <div className="agent-name">{agent.name}</div>
-                  <div className="agent-status">
-                    {isWaiting ? 'Awaiting approval...' : status}
-                  </div>
-                  {isWaiting && <div className="approval-badge">Awaiting your approval</div>}
-                </div>
-              )
-            })}
+        {/* Stats row */}
+        {loading ? (
+          <div style={{ display: 'flex', gap: 16, marginTop: 24 }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ height: 72, flex: 1, borderRadius: 12, background: 'var(--ui-bg)' }} className="skeleton" />
+            ))}
           </div>
         ) : (
-          <div className="empty-canvas">
-            <p>Describe a goal to assemble your agent team</p>
+          <div style={{ display: 'flex', gap: 16, marginTop: 24 }}>
+            <StatCard label="Active agents" value={String(activeCount)} accent="#22c55e" />
+            <StatCard label="Idle" value={String(idleCount)} accent="#a3a3a0" />
+            <StatCard label="Escalations today" value={String(escalatedToday)} accent="#f59e0b" />
+            <StatCard label="Total agents" value={String(agents.length)} accent="var(--ui-accent)" />
           </div>
         )}
       </div>
 
-      {assembledGraph && (
-        <div className="run-button-container">
-          <RunButton
-            graph={assembledGraph}
-            onRunStart={handleRunStart}
-            onStatusUpdate={(e) => setAgentStatuses(s => new Map(s).set(e.agentId, e.status))}
-            onRunDone={handleRunDone}
-            onRunError={handleRunError}
-          />
-        </div>
-      )}
+      {/* ── Body ───────────────────────────────────────────── */}
+      <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: 40 }}>
 
-      {/* Unit 5: Approval Modals — one per pending approval */}
-      {activeApprovals.map((approval) => (
-        <ApprovalModal
-          key={approval.event.content.toolCallId}
-          event={approval.event}
-          snapshot={approval.snapshot}
-          summary={approval.summary}
-          initialArgs={approvalArgsRef.current[approval.event.content.toolCallId]}
-          onApprove={(approvalId, toolCallId, revisedArgs) => {
-            if (revisedArgs) {
-              approvalArgsRef.current[toolCallId] = revisedArgs
-            }
-            handleApprove(approvalId, toolCallId, revisedArgs)
-          }}
-          onCancel={handleCancel}
-          onDismiss={handleDismissApproval}
-          suggestions={approval.suggestions}
-          onSuggestionAccept={(id) => handleSuggestionAccept(approval.event.content.toolCallId, id)}
-          onSuggestionDismiss={(id) => handleSuggestionDismiss(approval.event.content.toolCallId, id)}
-        />
-      ))}
+        {/* Agents grid */}
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2
+              style={{
+                fontFamily: "'IBM Plex Serif', Georgia, serif",
+                fontSize: 18,
+                fontWeight: 600,
+                color: 'var(--ui-text)',
+                margin: 0,
+              }}
+            >
+              Your agents
+            </h2>
+            <Link
+              href="/canvas"
+              style={{
+                fontSize: 13,
+                color: 'var(--ui-accent)',
+                textDecoration: 'none',
+                fontWeight: 500,
+              }}
+            >
+              Manage in Canvas →
+            </Link>
+          </div>
 
-      <style jsx>{`
-        .app-container {
-          display: flex;
-          height: 100vh;
-          overflow: hidden;
+          {loading ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+              {[1, 2, 3].map(i => <div key={i} style={{ height: 120, borderRadius: 12 }} className="skeleton" />)}
+            </div>
+          ) : agents.length === 0 ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                padding: '48px 0',
+                gap: 12,
+                background: 'var(--ui-surface)',
+                borderRadius: 16,
+                border: '1px solid var(--ui-border)',
+              }}
+            >
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <rect width="40" height="40" rx="12" fill="var(--ui-bg)" />
+                <path d="M20 10L28 26H12L20 10Z" stroke="var(--ui-text-tertiary)" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+              </svg>
+              <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--ui-text)', margin: 0 }}>No agents yet</p>
+              <p style={{ fontSize: 13, color: 'var(--ui-text-secondary)', margin: 0 }}>
+                Go to Canvas to create your first AI employee
+              </p>
+              <Link
+                href="/canvas"
+                style={{
+                  marginTop: 8,
+                  padding: '8px 18px',
+                  background: 'var(--ui-accent)',
+                  color: '#fff',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                Open Canvas
+              </Link>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+              {agents.map(agent => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  statusColor={statusColors[agent.status] ?? statusColors.idle}
+                  statusLabel={statusLabels[agent.status] ?? 'Unknown'}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Recent activity */}
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2
+              style={{
+                fontFamily: "'IBM Plex Serif', Georgia, serif",
+                fontSize: 18,
+                fontWeight: 600,
+                color: 'var(--ui-text)',
+                margin: 0,
+              }}
+            >
+              Recent runs
+            </h2>
+            <Link
+              href="/activity"
+              style={{
+                fontSize: 13,
+                color: 'var(--ui-accent)',
+                textDecoration: 'none',
+                fontWeight: 500,
+              }}
+            >
+              View all activity →
+            </Link>
+          </div>
+
+          {recentRuns.length === 0 ? (
+            <div
+              style={{
+                padding: '32px',
+                textAlign: 'center',
+                background: 'var(--ui-surface)',
+                borderRadius: 12,
+                border: '1px solid var(--ui-border)',
+                color: 'var(--ui-text-secondary)',
+                fontSize: 14,
+              }}
+            >
+              No runs yet. Your agents will appear here after their first run.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {recentRuns.map(run => (
+                <RunRow key={run.id} run={run} statusColors={statusColors} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <style>{`
+        .skeleton {
+          background: linear-gradient(90deg, var(--ui-bg) 25%, #f0f0ec 50%, var(--ui-bg) 75%);
+          background-size: 200% 100%;
+          animation: shimmer 1.8s infinite;
         }
-        .chat-panel {
-          width: 320px;
-          border-right: 1px solid var(--border);
-          display: flex;
-          flex-direction: column;
-          background: var(--panel);
-        }
-        .messages {
-          flex: 1;
-          overflow-y: auto;
-          padding: 16px;
-        }
-        .message {
-          padding: 12px;
-          border-radius: 8px;
-          margin-bottom: 8px;
-        }
-        .message-user {
-          background: var(--accent);
-          color: white;
-        }
-        .message-bot {
-          background: var(--border);
-          color: var(--text-primary);
-        }
-        .input-form {
-          padding: 16px;
-          border-top: 1px solid var(--border);
-          display: flex;
-          gap: 8px;
-        }
-        .goal-input {
-          flex: 1;
-          padding: 10px;
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          background: var(--bg);
-          color: var(--text-primary);
-        }
-        .canvas-panel {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .graph-view {
-          display: flex;
-          gap: 16px;
-          flex-wrap: wrap;
-          padding: 24px;
-        }
-        .agent-node {
-          padding: 16px 24px;
-          border-radius: 8px;
-          border: 2px solid;
-          transition: border-color 0.2s;
-        }
-        .agent-name {
-          font-weight: 600;
-        }
-        .agent-status {
-          font-size: 12px;
-          margin-top: 4px;
-          opacity: 0.7;
-        }
-        .agent-waiting {
-          border-color: #f59e0b;
-          background: #fffbeb;
-        }
-        .approval-badge {
-          margin-top: 6px;
-          font-size: 11px;
-          color: #92400e;
-          background: #fef3c7;
-          padding: 2px 8px;
-          border-radius: 999px;
-          display: inline-block;
-        }
-        .empty-canvas {
-          color: var(--text-muted);
-        }
-        .run-button-container {
-          position: fixed;
-          bottom: 24px;
-          right: 24px;
-          z-index: 100;
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
       `}</style>
     </div>
   )
+}
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function StatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        padding: '16px 20px',
+        background: 'var(--ui-surface)',
+        border: '1px solid var(--ui-border)',
+        borderRadius: 12,
+        borderTop: `3px solid ${accent}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 28,
+          fontWeight: 700,
+          color: 'var(--ui-text)',
+          lineHeight: 1,
+          fontFamily: "'IBM Plex Serif', Georgia, serif",
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          marginTop: 4,
+          fontSize: 12,
+          color: 'var(--ui-text-secondary)',
+          fontWeight: 500,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  )
+}
+
+function AgentCard({ agent, statusColor, statusLabel }: { agent: Agent; statusColor: string; statusLabel: string }) {
+  return (
+    <div
+      style={{
+        padding: '18px 20px',
+        background: 'var(--ui-surface)',
+        border: '1px solid var(--ui-border)',
+        borderRadius: 12,
+        transition: 'box-shadow 0.15s, transform 0.15s',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'
+        e.currentTarget.style.transform = 'translateY(-1px)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.boxShadow = 'none'
+        e.currentTarget.style.transform = 'translateY(0)'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div
+          style={{
+            fontFamily: "'IBM Plex Serif', Georgia, serif",
+            fontSize: 15,
+            fontWeight: 600,
+            color: 'var(--ui-text)',
+          }}
+        >
+          {agent.name}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: statusColor,
+              boxShadow: agent.status === 'running' ? `0 0 6px ${statusColor}` : 'none',
+              animation: agent.status === 'running' ? 'pulseDot 2s ease-in-out infinite' : 'none',
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--ui-text-secondary)', fontWeight: 500 }}>
+            {statusLabel}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--ui-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Runs today</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ui-text)' }}>{agent.runCountToday}</div>
+        </div>
+        {(agent.escalatedCountToday ?? 0) > 0 && (
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--ui-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Escalated</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#f59e0b' }}>{agent.escalatedCountToday}</div>
+          </div>
+        )}
+        {agent.budgetUsedPercent > 0 && (
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, color: 'var(--ui-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Budget</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ flex: 1, height: 5, background: 'var(--ui-border)', borderRadius: 3, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    width: `${Math.min(agent.budgetUsedPercent, 100)}%`,
+                    height: '100%',
+                    background: agent.budgetUsedPercent > 80 ? '#ef4444' : agent.budgetUsedPercent > 50 ? '#f59e0b' : '#22c55e',
+                    borderRadius: 3,
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ui-text-secondary)' }}>
+                {agent.budgetUsedPercent}%
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RunRow({ run, statusColors }: { run: RecentRun; statusColors: Record<string, string> }) {
+  const color = statusColors[run.status] ?? '#a3a3a0'
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        padding: '14px 18px',
+        background: 'var(--ui-surface)',
+        border: '1px solid var(--ui-border)',
+        borderRadius: 10,
+        transition: 'box-shadow 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}
+    >
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ui-text)' }}>{run.agentName ?? 'Agent'}</div>
+        <div style={{ fontSize: 12, color: 'var(--ui-text-secondary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {run.summary ?? '—'}
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--ui-text-tertiary)', flexShrink: 0 }}>
+        {run.startedAt ? formatTimeAgo(run.startedAt) : '—'}
+      </div>
+    </div>
+  )
+}
+
+function formatTimeAgo(date: string): string {
+  const now = new Date()
+  const d = new Date(date)
+  const diff = now.getTime() - d.getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
 }

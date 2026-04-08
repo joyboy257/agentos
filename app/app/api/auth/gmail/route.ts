@@ -45,11 +45,27 @@ export async function GET(request: NextRequest) {
 
   const tokens = await tokenResponse.json()
 
+  // Extract the user's Gmail address from their profile so we can route
+  // incoming push notifications to the right account.
+  let gmailAddress: string | undefined
+  try {
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    })
+    if (profileRes.ok) {
+      const profile = await profileRes.json()
+      gmailAddress = profile.email
+    }
+  } catch {
+    // Non-fatal — we can still store the token without the Gmail address
+  }
+
   await saveGmailTokenForUser(
     userId,
     tokens.access_token,
     tokens.refresh_token,
-    new Date(Date.now() + tokens.expires_in * 1000)
+    new Date(Date.now() + tokens.expires_in * 1000),
+    gmailAddress
   )
 
   return NextResponse.redirect(new URL('/app?gmail=connected', request.url))
