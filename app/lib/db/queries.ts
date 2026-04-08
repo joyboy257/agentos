@@ -305,6 +305,18 @@ export async function createTeam(
   return result.rows[0];
 }
 
+// --- GMAIL TOKENS ---
+export async function getUserByGmailAddress(gmailAddress: string) {
+  const result = await sql`
+    SELECT u.*
+    FROM users u
+    JOIN gmail_tokens gt ON gt.user_id = u.id
+    WHERE gt.gmail_address = ${gmailAddress}
+    LIMIT 1
+  `
+  return result.rows[0] ?? null
+}
+
 // --- USERS ---
 export async function getUserByEmail(email: string) {
   const result = await sql`SELECT * FROM users WHERE email = ${email}`;
@@ -451,14 +463,16 @@ export async function setGmailToken(data: {
   access_token: string;
   refresh_token?: string | null;
   expires_at?: Date | null;
+  gmail_address?: string | null;
 }): Promise<void> {
   await sql`
-    INSERT INTO gmail_tokens (user_id, access_token, refresh_token, expires_at)
-    VALUES (${data.user_id}, ${data.access_token}, ${data.refresh_token ?? null}, ${data.expires_at?.toISOString() ?? null})
+    INSERT INTO gmail_tokens (user_id, access_token, refresh_token, expires_at, gmail_address)
+    VALUES (${data.user_id}, ${data.access_token}, ${data.refresh_token ?? null}, ${data.expires_at?.toISOString() ?? null}, ${data.gmail_address ?? null})
     ON CONFLICT (user_id) DO UPDATE SET
       access_token = EXCLUDED.access_token,
       refresh_token = EXCLUDED.refresh_token,
-      expires_at = EXCLUDED.expires_at
+      expires_at = EXCLUDED.expires_at,
+      gmail_address = EXCLUDED.gmail_address
   `;
 }
 

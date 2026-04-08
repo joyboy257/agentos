@@ -35,13 +35,15 @@ export async function saveGmailTokenForUser(
   userId: string,
   accessToken: string,
   refreshToken?: string,
-  expiresAt?: Date
+  expiresAt?: Date,
+  gmailAddress?: string
 ): Promise<void> {
   await setGmailToken({
     user_id: userId,
     access_token: accessToken,
     refresh_token: refreshToken ?? null,
     expires_at: expiresAt ?? null,
+    gmail_address: gmailAddress ?? null,
   })
 }
 

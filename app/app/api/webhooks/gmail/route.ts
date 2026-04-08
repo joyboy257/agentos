@@ -81,11 +81,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { threadId, from, subject, snippet } = msgData;
   const messageId = message.messageId ?? '';
 
-  // Look up the user by the from email address in the Gmail message
-  const fromEmail = from;
-  const user = await getUserByEmail(fromEmail);
+  // Look up the user by their Gmail address (via gmail_tokens table).
+  // 'from' is the sender address — if Maria connected her Gmail to AgentOS,
+  // her gmail_token has her Gmail address stored. We use that to find her userId.
+  const { getUserByGmailAddress } = await import('@/lib/db/queries');
+  const user = await getUserByGmailAddress(from);
   if (!user) {
-    return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
+    // No AgentOS account has this Gmail connected — ignore silently
+    return NextResponse.json({ ok: true, reason: 'no_account_for_gmail' });
   }
   const userId = user.id;
 
