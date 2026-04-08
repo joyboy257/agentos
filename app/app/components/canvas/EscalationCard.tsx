@@ -161,12 +161,13 @@ export function EscalationCard({
               }),
           width: 480,
           maxWidth: 'calc(100vw - 48px)',
-          background: '#fffbeb',
-          border: '2px solid #f59e0b',
-          borderRadius: 12,
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.25)',
+          background: '#12121a',
+          border: '1.5px solid #f59e0b',
+          borderRadius: 16,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px #f59e0b20',
           zIndex: 1000,
           overflow: 'hidden',
+          animation: 'escalationPulse 2s ease-in-out infinite',
         }}
       >
         {/* Header */}
@@ -189,7 +190,7 @@ export function EscalationCard({
                 margin: 0,
                 fontSize: 15,
                 fontWeight: 600,
-                color: '#92400e',
+                color: '#fafafa',
                 lineHeight: 1.4,
               }}
             >
@@ -217,21 +218,21 @@ export function EscalationCard({
           </div>
         </div>
 
-        {/* Blast radius warning — shown for team escalations */}
+        {/* Blast radius warning */}
         {teamContext?.blastRadius && (
           <div
             style={{
               padding: '10px 20px',
-              background: 'rgba(239, 68, 68, 0.08)',
+              background: 'rgba(239, 68, 68, 0.1)',
               borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
               display: 'flex',
               gap: 8,
               alignItems: 'flex-start',
             }}
           >
-            <span style={{ fontSize: 13, color: '#991b1b', fontWeight: 500 }}>
+            <span style={{ fontSize: 13, color: '#f87171', fontWeight: 500 }}>
               Impact:{' '}
-              <span style={{ fontStyle: 'italic' }}>{teamContext.blastRadius}</span>
+              <span style={{ fontStyle: 'italic', color: '#fca5a5' }}>{teamContext.blastRadius}</span>
             </span>
           </div>
         )}
@@ -248,7 +249,7 @@ export function EscalationCard({
             style={{
               margin: 0,
               fontSize: 14,
-              color: '#92400e',
+              color: '#fcd34d',
               lineHeight: 1.6,
               fontStyle: 'italic',
             }}
@@ -263,11 +264,12 @@ export function EscalationCard({
             <p
               style={{
                 margin: '0 0 10px',
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 600,
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                color: '#b45309',
+                letterSpacing: '0.07em',
+                color: '#6b6b7b',
+                fontFamily: 'JetBrains Mono, monospace',
               }}
             >
               What the agent plans to do:
@@ -285,7 +287,7 @@ export function EscalationCard({
               <li
                 style={{
                   fontSize: 14,
-                  color: '#78350f',
+                  color: '#e5e5e5',
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: 6,
@@ -299,7 +301,7 @@ export function EscalationCard({
                   key={key}
                   style={{
                     fontSize: 14,
-                    color: '#78350f',
+                    color: '#c0c0bc',
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: 6,
@@ -308,7 +310,7 @@ export function EscalationCard({
                   <span style={{ color: '#f59e0b', fontWeight: 600 }}>•</span>
                   <span>
                     {keyToLabel(key)}:{' '}
-                    <span style={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 500, color: '#e5e5e5' }}>
                       {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                     </span>
                   </span>
@@ -322,11 +324,12 @@ export function EscalationCard({
             <p
               style={{
                 margin: '0 0 12px',
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 600,
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                color: '#b45309',
+                letterSpacing: '0.07em',
+                color: '#6b6b7b',
+                fontFamily: 'JetBrains Mono, monospace',
               }}
             >
               Edit arguments:
@@ -346,8 +349,9 @@ export function EscalationCard({
                       display: 'block',
                       fontSize: 13,
                       fontWeight: 500,
-                      color: '#78350f',
+                      color: '#a3a3a0',
                       marginBottom: 4,
+                      fontFamily: 'JetBrains Mono, monospace',
                     }}
                   >
                     {keyToLabel(key)}
@@ -363,11 +367,11 @@ export function EscalationCard({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #fcd34d',
+                        border: '1px solid #2e2e3e',
                         borderRadius: 6,
                         fontSize: 14,
-                        background: '#fff',
-                        color: '#111827',
+                        background: '#0a0a0f',
+                        color: '#e5e5e5',
                         boxSizing: 'border-box',
                         outline: 'none',
                       }}
@@ -383,11 +387,11 @@ export function EscalationCard({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #fcd34d',
+                        border: '1px solid #2e2e3e',
                         borderRadius: 6,
                         fontSize: 14,
-                        background: '#fff',
-                        color: '#111827',
+                        background: '#0a0a0f',
+                        color: '#e5e5e5',
                         boxSizing: 'border-box',
                         outline: 'none',
                       }}
@@ -412,15 +416,15 @@ export function EscalationCard({
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #fcd34d',
+                        border: '1px solid #2e2e3e',
                         borderRadius: 6,
                         fontSize: 14,
-                        background: '#fff',
-                        color: '#111827',
+                        background: '#0a0a0f',
+                        color: '#e5e5e5',
                         boxSizing: 'border-box',
                         outline: 'none',
                         resize: 'vertical',
-                        fontFamily: 'inherit',
+                        fontFamily: 'JetBrains Mono, monospace',
                       }}
                     />
                   )}
@@ -451,16 +455,17 @@ export function EscalationCard({
                   gap: 6,
                   padding: '8px 16px',
                   borderRadius: 6,
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 500,
                   cursor: submitting ? 'not-allowed' : 'pointer',
-                  border: '1px solid #d1d5db',
-                  background: '#fff',
-                  color: '#374151',
+                  border: '1px solid #2e2e3e',
+                  background: 'transparent',
+                  color: '#6b6b7b',
                   opacity: submitting ? 0.5 : 1,
+                  fontFamily: 'JetBrains Mono, monospace',
                 }}
               >
-                <X size={14} />
+                <X size={13} />
                 Cancel
               </button>
               <button
@@ -472,13 +477,14 @@ export function EscalationCard({
                   gap: 6,
                   padding: '8px 16px',
                   borderRadius: 6,
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 500,
                   cursor: submitting ? 'not-allowed' : 'pointer',
-                  border: '1px solid #d1d5db',
-                  background: '#f3f4f6',
-                  color: '#6b7280',
+                  border: '1px solid #2e2e3e',
+                  background: 'transparent',
+                  color: '#6b6b7b',
                   opacity: submitting ? 0.5 : 1,
+                  fontFamily: 'JetBrains Mono, monospace',
                 }}
               >
                 Skip
@@ -492,16 +498,17 @@ export function EscalationCard({
                   gap: 6,
                   padding: '8px 16px',
                   borderRadius: 6,
-                  fontSize: 14,
-                  fontWeight: 500,
+                  fontSize: 13,
+                  fontWeight: 600,
                   cursor: submitting ? 'not-allowed' : 'pointer',
-                  border: '1px solid #6366f1',
-                  background: '#fff',
-                  color: '#4338ca',
+                  border: '1px solid #7c3aed',
+                  background: 'transparent',
+                  color: '#a78bfa',
                   opacity: submitting ? 0.5 : 1,
+                  fontFamily: 'JetBrains Mono, monospace',
                 }}
               >
-                <Edit2 size={14} />
+                <Edit2 size={13} />
                 Edit &amp; Approve
               </button>
               <button
@@ -513,16 +520,18 @@ export function EscalationCard({
                   gap: 6,
                   padding: '8px 16px',
                   borderRadius: 6,
-                  fontSize: 14,
-                  fontWeight: 500,
+                  fontSize: 13,
+                  fontWeight: 600,
                   cursor: submitting ? 'not-allowed' : 'pointer',
-                  border: '1px solid #059669',
-                  background: '#059669',
+                  border: 'none',
+                  background: '#22c55e',
                   color: '#fff',
                   opacity: submitting ? 0.5 : 1,
+                  fontFamily: 'JetBrains Mono, monospace',
+                  boxShadow: '0 0 16px rgba(34, 197, 94, 0.3)',
                 }}
               >
-                <Check size={14} />
+                <Check size={13} />
                 Approve &amp; Send
               </button>
             </>
@@ -537,13 +546,14 @@ export function EscalationCard({
                   gap: 6,
                   padding: '8px 16px',
                   borderRadius: 6,
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 500,
                   cursor: submitting ? 'not-allowed' : 'pointer',
-                  border: '1px solid #d1d5db',
-                  background: '#fff',
-                  color: '#374151',
+                  border: '1px solid #2e2e3e',
+                  background: 'transparent',
+                  color: '#6b6b7b',
                   opacity: submitting ? 0.5 : 1,
+                  fontFamily: 'JetBrains Mono, monospace',
                 }}
               >
                 Back
@@ -557,16 +567,18 @@ export function EscalationCard({
                   gap: 6,
                   padding: '8px 16px',
                   borderRadius: 6,
-                  fontSize: 14,
-                  fontWeight: 500,
+                  fontSize: 13,
+                  fontWeight: 600,
                   cursor: submitting ? 'not-allowed' : 'pointer',
-                  border: '1px solid #059669',
-                  background: '#059669',
+                  border: 'none',
+                  background: '#22c55e',
                   color: '#fff',
                   opacity: submitting ? 0.5 : 1,
+                  fontFamily: 'JetBrains Mono, monospace',
+                  boxShadow: '0 0 16px rgba(34, 197, 94, 0.3)',
                 }}
               >
-                <Check size={14} />
+                <Check size={13} />
                 Submit Edit
               </button>
             </>

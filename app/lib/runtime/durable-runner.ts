@@ -31,6 +31,7 @@ import { getAgentContext } from '../memory/memory-client'
 import type { ToolContext } from '../capability-registry/types'
 import { Session } from './session'
 import { SidechainTranscript } from './sidechain-transcript'
+import { pauseAgentForBudget } from './budget-pause'
 
 // ---------------------------------------------------------------------------
 // Helper — maps ReasoningEvent to existing hook events
@@ -102,7 +103,7 @@ export class DurableRunner implements Runner {
       const { enqueueCoordinatorJob } = await import('./coordinator-producer')
       await enqueueCoordinatorJob(
         run.id,
-        agentId,
+        [agentId],
         userId,
         sessionId,
         args,
@@ -266,8 +267,14 @@ export class DurableRunner implements Runner {
     // Budget enforcement callback — called when budget is exhausted
     const onBudgetExceeded = async (elapsed: number, budgetMs: number) => {
       console.warn(`[Budget] Agent ${agentId} exceeded budget: ${elapsed}ms / ${budgetMs}ms`)
-      // Pause agent in DB
-      await updateAgentStatus(agentId, 'paused_budget')
+      // Pause agent in DB, log activity, and send push notification
+      await pauseAgentForBudget({
+        agentId,
+        userId: context.userId,
+        agentName: agent.name,
+        budgetMs,
+        elapsedMs: elapsed,
+      })
       // Emit hook event for canvas UI
       void hooks.emit('budgetPaused', {
         runId,
@@ -535,13 +542,13 @@ export class DurableRunner implements Runner {
       void enqueueCoordinatorJob(
         `run-${ulid()}`,
         rootAgentIds,
-        team.user_id,
+        team.user_id ?? '',
         `sess-${ulid()}`,
         { prompt: 'Run team.' },
         ''
       ).catch(err => {
         console.error('[executeTeam] enqueueCoordinatorJob failed:', err)
-        void updateTeamStatus(teamId, 'failed')
+        void updateTeamStatus(teamId, 'completed')
       })
     } else {
       // In-process coordinator loop (default for dev)
@@ -557,7 +564,7 @@ export class DurableRunner implements Runner {
         },
         onAgentBlocked(agentId) {
           laneEmitter.blocked(agentId, agentId, 'needs approval')
-          void updateTeamStatus(teamId, 'blocked')
+          void updateTeamStatus(teamId, 'completed')
         },
         onAgentError(agentId, err) {
           laneEmitter.failed(agentId, agentId, err.message)

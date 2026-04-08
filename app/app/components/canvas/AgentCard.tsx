@@ -72,7 +72,7 @@ export function AgentCard({ data }: AgentCardProps) {
         <Info size={12} />
       </button>
 
-      {/* Card popover */}
+      {/* Card popover — Railway dark */}
       {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
@@ -81,26 +81,27 @@ export function AgentCard({ data }: AgentCardProps) {
             top: 'calc(100% + 8px)',
             right: 0,
             width: 220,
-            background: '#1c1c1a',
-            border: '1px solid #3f3f3c',
+            background: '#12121a',
+            border: '1px solid #1e1e2e',
             borderRadius: 12,
             padding: 14,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.32)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
             zIndex: 100,
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
+            gap: 10,
           }}
         >
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 600,
-                color: '#a3a3a0',
+                color: '#6b6b7b',
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                letterSpacing: '0.08em',
+                fontFamily: 'JetBrains Mono, monospace',
               }}
             >
               Agent Status
@@ -114,7 +115,7 @@ export function AgentCard({ data }: AgentCardProps) {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#6b6b68',
+                color: '#3e3e4e',
                 padding: 0,
                 display: 'flex',
                 alignItems: 'center',
@@ -124,12 +125,13 @@ export function AgentCard({ data }: AgentCardProps) {
             </button>
           </div>
 
-          {/* Agent name */}
+          {/* Agent name — IBM Plex Serif */}
           <div
             style={{
+              fontFamily: "'IBM Plex Serif', Georgia, serif",
               fontSize: 14,
               fontWeight: 600,
-              color: '#fafaf9',
+              color: '#e5e5e5',
               lineHeight: 1.3,
             }}
           >
@@ -145,46 +147,47 @@ export function AgentCard({ data }: AgentCardProps) {
                 borderRadius: '50%',
                 background: statusColor,
                 flexShrink: 0,
+                boxShadow: data.status === 'running' ? `0 0 6px ${statusColor}` : 'none',
                 animation: data.status === 'running' ? 'pulse 2s ease-in-out infinite' : 'none',
               }}
             />
-            <span style={{ fontSize: 13, color: '#fafaf9', fontWeight: 500 }}>
+            <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#e5e5e5', fontWeight: 500 }}>
               {statusLabels[data.status]}
             </span>
           </div>
 
           {/* Divider */}
-          <div style={{ height: 1, background: '#3f3f3c' }} />
+          <div style={{ height: 1, background: '#1e1e2e' }} />
 
           {/* Last run */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 11, color: '#6b6b68', fontWeight: 500 }}>Last run</span>
-            <span style={{ fontSize: 13, color: '#fafaf9' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 10, color: '#3e3e4e', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'JetBrains Mono, monospace' }}>Last run</span>
+            <span style={{ fontSize: 12, color: '#a3a3a0', fontFamily: 'JetBrains Mono, monospace' }}>
               {data.lastRunAt ?? 'Never'}
             </span>
           </div>
 
           {/* Next wake */}
           {data.nextWakeAt && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 11, color: '#6b6b68', fontWeight: 500 }}>Next wake</span>
-              <span style={{ fontSize: 13, color: '#fafaf9' }}>{data.nextWakeAt}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 10, color: '#3e3e4e', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'JetBrains Mono, monospace' }}>Next wake</span>
+              <span style={{ fontSize: 12, color: '#a3a3a0', fontFamily: 'JetBrains Mono, monospace' }}>{data.nextWakeAt}</span>
             </div>
           )}
 
           {/* Runs today */}
           {data.runCountToday !== undefined && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 11, color: '#6b6b68', fontWeight: 500 }}>Runs today</span>
-              <span style={{ fontSize: 13, color: '#fafaf9' }}>{data.runCountToday}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 10, color: '#3e3e4e', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'JetBrains Mono, monospace' }}>Runs today</span>
+              <span style={{ fontSize: 12, color: '#a3a3a0', fontFamily: 'JetBrains Mono, monospace' }}>{data.runCountToday}</span>
             </div>
           )}
 
           {/* Escalations today */}
           {data.escalatedCountToday !== undefined && data.escalatedCountToday > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 11, color: '#6b6b68', fontWeight: 500 }}>Escalations today</span>
-              <span style={{ fontSize: 13, color: '#f97316' }}>{data.escalatedCountToday}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 10, color: '#3e3e4e', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'JetBrains Mono, monospace' }}>Escalations</span>
+              <span style={{ fontSize: 12, color: '#f97316', fontFamily: 'JetBrains Mono, monospace' }}>{data.escalatedCountToday}</span>
             </div>
           )}
 
@@ -192,13 +195,13 @@ export function AgentCard({ data }: AgentCardProps) {
           {data.budgetUsedPercent !== undefined && data.budgetUsedPercent > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 11, color: '#6b6b68', fontWeight: 500 }}>Budget used</span>
-                <span style={{ fontSize: 11, color: '#a3a3a0' }}>{data.budgetUsedPercent}%</span>
+                <span style={{ fontSize: 10, color: '#3e3e4e', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'JetBrains Mono, monospace' }}>Budget used</span>
+                <span style={{ fontSize: 10, color: '#6b6b7b', fontFamily: 'JetBrains Mono, monospace' }}>{data.budgetUsedPercent}%</span>
               </div>
               <div
                 style={{
-                  height: 6,
-                  background: '#3f3f3c',
+                  height: 5,
+                  background: '#1e1e2e',
                   borderRadius: 3,
                   overflow: 'hidden',
                 }}
@@ -208,9 +211,9 @@ export function AgentCard({ data }: AgentCardProps) {
                     width: `${Math.min(data.budgetUsedPercent, 100)}%`,
                     height: '100%',
                     background:
-                      data.budgetUsedPercent > 90
+                      data.budgetUsedPercent > 80
                         ? '#ef4444'
-                        : data.budgetUsedPercent > 70
+                        : data.budgetUsedPercent > 50
                         ? '#f59e0b'
                         : '#22c55e',
                     borderRadius: 3,
@@ -218,10 +221,32 @@ export function AgentCard({ data }: AgentCardProps) {
                   }}
                 />
               </div>
+              {data.budgetUsedPercent > 80 && (
+                <a
+                  href="/settings/agents"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '5px 10px',
+                    background: 'none',
+                    border: '1px solid #ef4444',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#ef4444',
+                    textDecoration: 'none',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                >
+                  Add budget
+                </a>
+              )}
             </div>
           )}
 
-          {/* Resume button — shown when agent is paused on budget */}
+          {/* Resume button */}
           {data.status === 'paused_budget' && (
             <button
               onClick={async (e) => {
@@ -229,7 +254,6 @@ export function AgentCard({ data }: AgentCardProps) {
                 try {
                   const res = await fetch(`/api/agents/${data.nodeId}/resume`, { method: 'POST' })
                   if (res.ok) {
-                    // Reload the page to refresh canvas state
                     window.location.reload()
                   }
                 } catch (err) {
@@ -249,6 +273,8 @@ export function AgentCard({ data }: AgentCardProps) {
                 fontWeight: 600,
                 color: '#ffffff',
                 width: '100%',
+                fontFamily: 'JetBrains Mono, monospace',
+                boxShadow: '0 0 12px rgba(245, 158, 11, 0.3)',
               }}
             >
               Resume Agent

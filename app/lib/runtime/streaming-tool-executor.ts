@@ -292,6 +292,7 @@ export async function streamingToolExecutor(
 
     // Budget check before LLM call
     if (budgetMs != null && elapsedMs + ESTIMATED_LLM_CALL_MS > budgetMs) {
+      // Don't make the call — pause the agent first, then return
       onBudgetExceeded?.(elapsedMs, budgetMs)
       return { messages: inputMessages, stopReason: 'budget_exceeded', elapsedMs }
     }

@@ -128,6 +128,83 @@ export async function sendApprovalPush(params: {
 }
 
 /**
+ * Send a push notification when an agent's budget is exhausted.
+ */
+export async function sendBudgetExhaustedPush(params: {
+  agentId: string
+  userId: string
+  agentName: string
+  budgetMs: number
+  elapsedMs: number
+}): Promise<void> {
+  const { agentId, userId, agentName, budgetMs, elapsedMs } = params
+
+  const budgetDollars = (budgetMs / 1000 * 0.001).toFixed(2) // rough conversion
+
+  // ── Slack notification transport ────────────────────────────────────────────
+  if (await isSlackConnected(userId)) {
+    const token = await getSlackToken(userId)
+    if (token) {
+      try {
+        const { channels } = await listChannels(token, 10)
+        const defaultChannel = channels.find((c) => c.name === 'general') ?? channels[0]
+        if (defaultChannel) {
+          const text = [
+            `*Agent paused — ${agentName}*`,
+            ``,
+            `Budget of $${budgetDollars} has been reached.`,
+            ``,
+            `_Add more budget at ${process.env.NEXT_PUBLIC_APP_URL}/settings/agents_`,
+          ].join('\n')
+          await sendSlackMessage(token, defaultChannel.id, text)
+        }
+      } catch (err) {
+        console.error('[push] slack send error:', err)
+      }
+    }
+  }
+
+  // ── Web Push notification transport ────────────────────────────────────────
+  const result = await sql`
+    SELECT endpoint, p256dh, auth
+    FROM push_subscriptions
+    WHERE user_id = ${userId}
+  `
+
+  if (result.rows.length === 0) return
+
+  const payload = JSON.stringify({
+    title: 'Agent paused — budget reached',
+    body: `${agentName} paused — budget of $${budgetDollars} reached. Tap to add more budget.`,
+    icon: '/icon-192.png',
+    badge: '/badge-72.png',
+    tag: `budget-${agentId}`,
+    data: { agentId, type: 'budget_exhausted' },
+    actions: [
+      { action: 'add_budget', title: 'Add budget' },
+      { action: 'view', title: 'View agent' },
+    ],
+  })
+
+  for (const row of result.rows) {
+    const sub = {
+      endpoint: row.endpoint as string,
+      keys: { p256dh: row.p256dh as string, auth: row.auth as string },
+    }
+    try {
+      await webpush.sendNotification(sub, payload)
+    } catch (err) {
+      const statusCode = (err as { statusCode?: number }).statusCode
+      if (statusCode === 404 || statusCode === 410) {
+        await sql`DELETE FROM push_subscriptions WHERE endpoint = ${row.endpoint}`
+      } else {
+        console.error('[push] send error:', err)
+      }
+    }
+  }
+}
+
+/**
  * Save a push subscription for a user (called from /api/push/subscribe).
  */
 export async function savePushSubscription(params: {
@@ -151,4 +228,90 @@ export async function savePushSubscription(params: {
  */
 export async function deletePushSubscription(endpoint: string): Promise<void> {
   await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`
+}
+
+/**
+ * Send a push notification when a proactive (scheduled) agent run completes.
+ * Tells Maria what the agent did while she slept.
+ *
+ * Title example: "Email Agent ran at 7am — 3 emails processed"
+ */
+export async function sendProactiveRunPush(params: {
+  agentId: string
+  agentName: string
+  userId: string
+  runId: string
+  status: string
+  cronExpression?: string
+}): Promise<void> {
+  const { agentName, userId, runId, status } = params
+
+  const summary = status === 'completed'
+    ? `${agentName} completed its scheduled run successfully.`
+    : status === 'waiting_for_approval'
+    ? `${agentName} completed — 1 escalation needs your input.`
+    : `${agentName} run ended with status: ${status}.`
+
+  const title = `${agentName} ran on schedule`
+
+  // ── Slack notification transport ────────────────────────────────────────────
+  if (await isSlackConnected(userId)) {
+    const token = await getSlackToken(userId)
+    if (token) {
+      try {
+        const { channels } = await listChannels(token, 10)
+        const defaultChannel = channels.find((c) => c.name === 'general') ?? channels[0]
+        if (defaultChannel) {
+          const text = [
+            `*${title}*`,
+            ``,
+            `_${summary}_`,
+            ``,
+            `_View run at ${process.env.NEXT_PUBLIC_APP_URL}/runs/${runId}_`,
+          ].join('\n')
+          await sendSlackMessage(token, defaultChannel.id, text)
+        }
+      } catch (err) {
+        console.error('[push] proactive run slack send error:', err)
+      }
+    }
+  }
+
+  // ── Web Push notification transport ────────────────────────────────────────
+  const result = await sql`
+    SELECT endpoint, p256dh, auth
+    FROM push_subscriptions
+    WHERE user_id = ${userId}
+  `
+
+  if (result.rows.length === 0) return
+
+  const payload = JSON.stringify({
+    title,
+    body: summary,
+    icon: '/icon-192.png',
+    badge: '/badge-72.png',
+    tag: `proactive-${runId}`,
+    data: { runId, agentId: params.agentId },
+    actions: [
+      { action: 'view', title: 'View' },
+    ],
+  })
+
+  for (const row of result.rows) {
+    const sub = {
+      endpoint: row.endpoint as string,
+      keys: { p256dh: row.p256dh as string, auth: row.auth as string },
+    }
+    try {
+      await webpush.sendNotification(sub, payload)
+    } catch (err) {
+      const statusCode = (err as { statusCode?: number }).statusCode
+      if (statusCode === 404 || statusCode === 410) {
+        await sql`DELETE FROM push_subscriptions WHERE endpoint = ${row.endpoint}`
+      } else {
+        console.error('[push] proactive run send error:', err)
+      }
+    }
+  }
 }

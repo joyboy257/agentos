@@ -105,6 +105,9 @@ import '@/lib/connectors/hubspot'
 
 // HubSpot tools are auto-registered via @/lib/connectors/hubspot
 
+// Import Instagram connector — auto-registers instagram.* tools
+import '@/lib/connectors/instagram'
+
 // web.search (ingest)
 capabilityRegistry.registerCapability(
   {

@@ -7,51 +7,82 @@ import type { CanvasNode, AgentNodeData } from './CanvasProvider'
 import { Eye } from 'lucide-react'
 import { AgentCard } from './AgentCard'
 
-const statusColors: Record<AgentNodeData['status'], string> = {
-  running: '#22c55e',
-  idle: '#a3a3a0',
-  stopped: '#a3a3a0',
-  scheduled: '#f59e0b',
+// ── Railway dark canvas design tokens ──────────────────────────────
+const canvas = {
+  bg: '#0a0a0f',
+  panel: '#12121a',
+  panelHover: '#1a1a24',
+  border: '#1e1e2e',
+  borderHover: '#2e2e3e',
+  text: '#e5e5e5',
+  textMuted: '#6b6b7b',
+  textDim: '#3e3e4e',
+  accent: '#7c3aed',     // Railway soft violet
+  active: '#2dd4bf',     // teal — running/active
+  success: '#22c55e',
+  warning: '#f59e0b',
   error: '#ef4444',
-  waiting: '#60a5fa',
-  paused_budget: '#f59e0b',
+  info: '#60a5fa',
 }
 
-const roleColors: Record<AgentNodeData['role'], string> = {
-  'Team Lead': '#7c3aed',
-  Worker: '#5b4fe9',
+const statusColors: Record<AgentNodeData['status'], string> = {
+  running: canvas.active,
+  idle: canvas.textMuted,
+  stopped: canvas.textMuted,
+  scheduled: canvas.warning,
+  error: canvas.error,
+  waiting: canvas.info,
+  paused_budget: canvas.warning,
 }
 
-const archetypeColors: Record<NonNullable<AgentNodeData['archetype']>, { color: string; bgColor: string }> = {
-  Ingest: { color: '#0ea5e9', bgColor: '#f0f9ff' },
-  Process: { color: '#f59e0b', bgColor: '#fffbeb' },
-  Distill: { color: '#10b981', bgColor: '#ecfdf5' },
+const archetypeBorderColors: Record<NonNullable<AgentNodeData['archetype']>, string> = {
+  Ingest: '#0ea5e9',
+  Process: '#f59e0b',
+  Distill: '#10b981',
 }
 
-// Coordinator (Team Lead) styling constants — applied when data.isCoordinator === true
-const COORDINATOR_BG = '#1e1b4b'
-const COORDINATOR_BORDER = '#6366f1'
-const COORDINATOR_TEXT = '#ffffff'
-const COORDINATOR_MUTED = '#a5b4fc'
-const COORDINATOR_BADGE_BG = '#6366f1'
-const COORDINATOR_STATUS_GREEN = '#22c55e'
-const COORDINATOR_STATUS_BLUE = '#3b82f6'
-const COORDINATOR_STATUS_AMBER = '#f59e0b'
-const COORDINATOR_STATUS_RED = '#ef4444'
+const archetypeDotColors: Record<NonNullable<AgentNodeData['archetype']>, string> = {
+  Ingest: '#38bdf8',
+  Process: '#fbbf24',
+  Distill: '#34d399',
+}
 
 function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
   const nodeData = data as AgentNodeData
   const isCoordinator = nodeData.isCoordinator === true
   const isTeamLead = nodeData.role === 'Team Lead' || isCoordinator
 
-  // Coordinator uses indigo theme; regular agents use the existing role-based theme
-  const borderColor = isCoordinator
-    ? COORDINATOR_BORDER
-    : roleColors[nodeData.role] ?? '#e5e5e3'
-  const statusColor = statusColors[nodeData.status] ?? statusColors.idle
+  const statusColor = statusColors[nodeData.status] ?? canvas.textMuted
 
-  const width = isCoordinator ? 200 : isTeamLead ? 280 : 220
-  const height = isCoordinator ? 160 : isTeamLead ? 150 : 120
+  // Role badge: TEAM LEAD or WORKER
+  const roleBadge = isTeamLead ? (
+    <span style={{
+      fontSize: 10,
+      fontWeight: 600,
+      color: canvas.accent,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      fontFamily: 'JetBrains Mono, monospace',
+    }}>
+      {isCoordinator ? 'Coordinator' : 'Team Lead'}
+    </span>
+  ) : (
+    <span style={{
+      fontSize: 10,
+      fontWeight: 500,
+      color: canvas.textDim,
+      letterSpacing: '0.05em',
+      textTransform: 'uppercase',
+      fontFamily: 'JetBrains Mono, monospace',
+    }}>
+      Worker
+    </span>
+  )
+
+  // Archetype badge — only for non-lead workers
+  const archetypeBorder = !isTeamLead && nodeData.archetype
+    ? archetypeBorderColors[nodeData.archetype]
+    : canvas.accent
 
   const handleViewTrace = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -74,120 +105,100 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
           document.dispatchEvent(event)
         }}
         style={{
-          width,
-          height,
-          background: COORDINATOR_BG,
-          border: `2px solid ${statusColor}`,
-          borderRadius: 12,
-          padding: 12,
-          boxShadow: `0 0 0 1px ${statusColor}40, 0 4px 16px rgba(0,0,0,0.20)`,
+          width: 260,
+          minHeight: 120,
+          background: canvas.panel,
+          border: `1.5px solid ${canvas.accent}`,
+          borderRadius: 16,
+          padding: '14px 16px',
+          boxShadow: selected
+            ? `0 0 0 2px ${canvas.accent}40, 0 8px 32px rgba(0,0,0,0.5)`
+            : `0 8px 32px rgba(0,0,0,0.4)`,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 10,
           position: 'relative',
-          outline: selected ? `2px solid ${statusColor}` : 'none',
-          outlineOffset: '2px',
           cursor: 'pointer',
+          animation: 'nodeEnter 200ms ease-out',
         }}
       >
-        {/* Coordinator badge */}
-        <div
-          style={{
-            position: 'absolute',
-            top: -10,
-            left: 12,
-            background: COORDINATOR_BADGE_BG,
-            color: '#fff',
-            fontSize: 9,
-            fontWeight: 700,
-            padding: '2px 6px',
-            borderRadius: 4,
-            letterSpacing: '0.05em',
-          }}
-        >
-          COORDINATOR
+        {/* Coordinator top badge */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {roleBadge}
+          {/* Status dot */}
+          <span style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: statusColor,
+            flexShrink: 0,
+            boxShadow: nodeData.status === 'running' ? `0 0 6px ${statusColor}` : 'none',
+            animation: nodeData.status === 'running' ? 'pulse 2s ease-in-out infinite' : 'none',
+          }} />
         </div>
 
-        {/* Node content */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-          <div style={{ fontSize: 18 }}>
-            <span style={{ color: '#fbbf24' }}>★</span>
-          </div>
-          <div>
-            <div style={{ color: COORDINATOR_TEXT, fontWeight: 600, fontSize: 13 }}>
-              {nodeData.name}
-            </div>
-            <div
-              style={{
-                color: statusColor,
-                fontSize: 11,
-                textTransform: 'capitalize',
-              }}
-            >
-              {nodeData.status.replace('_', ' ')}
-            </div>
-          </div>
+        {/* Agent name — IBM Plex Serif */}
+        <div style={{
+          fontFamily: "'IBM Plex Serif', Georgia, serif",
+          fontWeight: 600,
+          fontSize: 15,
+          color: canvas.text,
+          lineHeight: 1.3,
+        }}>
+          {nodeData.name}
         </div>
 
-        {/* Team member health dots */}
+        {/* Status label */}
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 11,
+          color: statusColor,
+          textTransform: 'capitalize',
+        }}>
+          {nodeData.status === 'paused_budget' ? 'Budget exceeded' : nodeData.status.replace('_', ' ')}
+        </div>
+
+        {/* Team health dots */}
         {nodeData.teamMembers && nodeData.teamMembers.length > 0 && (
-          <div
-            style={{
-              marginTop: 4,
-              display: 'flex',
-              gap: 4,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}
-          >
-            <span style={{ color: COORDINATOR_MUTED, fontSize: 10, fontWeight: 500 }}>
-              Team:
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: canvas.textDim }}>
+              TEAM
             </span>
             {nodeData.teamMembers.map((m) => (
               <div
                 key={m.agentId}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background:
-                    m.status === 'completed'
-                      ? COORDINATOR_STATUS_GREEN
-                      : m.status === 'failed'
-                        ? COORDINATOR_STATUS_RED
-                        : m.status === 'running'
-                          ? COORDINATOR_STATUS_BLUE
-                          : '#6b7280',
-                }}
                 title={`${m.name}: ${m.status}`}
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: m.status === 'completed' ? canvas.success
+                    : m.status === 'failed' ? canvas.error
+                    : m.status === 'running' ? canvas.active
+                    : canvas.textDim,
+                  flexShrink: 0,
+                }}
               />
             ))}
           </div>
         )}
 
-        {/* Running subtitle */}
         {nodeData.status === 'running' && (
-          <div style={{ color: COORDINATOR_MUTED, fontSize: 10 }}>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: canvas.textMuted }}>
             Coordinating {nodeData.teamMembers?.length ?? 0} worker(s)...
           </div>
         )}
 
+        <AgentCard data={{ ...nodeData, nodeId: id }} />
+
         {/* Handles */}
-        <Handle
-          type="target"
-          position={Position.Top}
-          style={{ background: COORDINATOR_BORDER, width: 8, height: 8, border: 'none' }}
-        />
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          style={{ background: COORDINATOR_BORDER, width: 8, height: 8, border: 'none' }}
-        />
+        <Handle type="target" position={Position.Top}    style={{ background: canvas.accent, width: 8, height: 8, border: 'none' }} />
+        <Handle type="source" position={Position.Bottom} style={{ background: canvas.accent, width: 8, height: 8, border: 'none' }} />
       </div>
     )
   }
 
-  // ─── Regular / Worker variant ─────────────────────────────────────────────
+  // ─── Worker variant (Railway dark node) ────────────────────────────────
   return (
     <div
       onClick={(e) => {
@@ -196,221 +207,204 @@ function AgentNode({ data, id, selected }: NodeProps<CanvasNode>) {
         document.dispatchEvent(event)
       }}
       style={{
-        width,
-        height,
-        background: '#ffffff',
-        border: `2px solid ${borderColor}`,
+        width: 240,
+        minHeight: 100,
+        background: canvas.panel,
+        border: `1.5px solid ${archetypeBorder}`,
         borderRadius: 16,
-        padding: '16px',
-        boxShadow: `0 4px 16px rgba(0,0,0,0.10)`,
+        padding: '14px 16px',
+        boxShadow: selected
+          ? `0 0 0 2px ${archetypeBorder}40, 0 8px 32px rgba(0,0,0,0.4)`
+          : `0 8px 32px rgba(0,0,0,0.3)`,
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: 8,
         position: 'relative',
-        outline: selected ? '2px solid #5b4fe9' : 'none',
-        outlineOffset: '2px',
         cursor: 'pointer',
+        transition: 'box-shadow 150ms ease, border-color 150ms ease',
+        animation: 'nodeEnter 200ms ease-out',
       }}
     >
-      {/* Input handle (left) */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id={`${id}-target`}
-        style={{
-          background: borderColor,
-          width: 8,
-          height: 8,
-          border: 'none',
-        }}
-      />
+      {/* Handles */}
+      <Handle type="target" position={Position.Left}  id={`${id}-target`} style={{ background: archetypeBorder, width: 8, height: 8, border: 'none' }} />
+      <Handle type="source" position={Position.Right} id={`${id}-source`} style={{ background: archetypeBorder, width: 8, height: 8, border: 'none' }} />
 
-      {/* Header row */}
+      {/* Top row: role badge + status dot + info button */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 500,
-            color: '#6b6b68',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          {nodeData.role}
-        </span>
-        {/* Status indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span
-            style={{
-              fontSize: '10px',
-              color: '#888',
-              fontWeight: 400,
-            }}
-          >
-            {nodeData.status === 'running'
-              ? 'Running'
-              : nodeData.status === 'scheduled'
-                ? 'Scheduled'
-                : nodeData.status === 'paused_budget'
-                  ? 'Budget exceeded'
-                  : 'Idle'}
+        {roleBadge}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 10,
+            color: canvas.textMuted,
+            textTransform: 'capitalize',
+          }}>
+            {nodeData.status === 'paused_budget' ? 'Budget exceeded' : nodeData.status.replace('_', ' ')}
           </span>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: statusColor,
-              flexShrink: 0,
-              animation: nodeData.status === 'running' ? 'pulse 2s ease-in-out infinite' : 'none',
-            }}
-          />
+          <span style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: statusColor,
+            flexShrink: 0,
+            boxShadow: nodeData.status === 'running' ? `0 0 6px ${statusColor}` : 'none',
+            animation: nodeData.status === 'running' ? 'pulse 2s ease-in-out infinite' : 'none',
+          }} />
+          <AgentCard data={{ ...nodeData, nodeId: id }} />
         </div>
-        <AgentCard data={{ ...nodeData, nodeId: id }} />
       </div>
 
-      {/* Agent name */}
-      <div
-        style={{
-          fontSize: '16px',
-          fontWeight: 600,
-          color: '#1c1c1a',
-          lineHeight: 1.3,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
+      {/* Agent name — IBM Plex Serif */}
+      <div style={{
+        fontFamily: "'IBM Plex Serif', Georgia, serif",
+        fontWeight: 600,
+        fontSize: 15,
+        color: canvas.text,
+        lineHeight: 1.3,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>
         {nodeData.name}
       </div>
 
-      {/* Worker-specific: archetype badge */}
+      {/* Archetype accent bar — left edge indicator */}
       {!isTeamLead && nodeData.archetype && (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            padding: '2px 8px',
-            background: archetypeColors[nodeData.archetype].bgColor,
-            borderRadius: 9999,
-            fontSize: '11px',
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+          <div style={{
+            width: 3,
+            height: 14,
+            borderRadius: 2,
+            background: archetypeDotColors[nodeData.archetype],
+            flexShrink: 0,
+          }} />
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 11,
             fontWeight: 500,
-            color: archetypeColors[nodeData.archetype].color,
-            width: 'fit-content',
-          }}
-        >
-          {nodeData.archetype}
+            color: archetypeDotColors[nodeData.archetype],
+          }}>
+            {nodeData.archetype}
+          </span>
         </div>
       )}
 
-      {/* Team Lead-specific: team info */}
-      {isTeamLead && (
-        <div
-          style={{
-            fontSize: '12px',
-            color: '#888',
-          }}
-        >
-          {nodeData.status === 'running' ? 'Coordinating workers' : 'Team is idle'}
-        </div>
-      )}
-
-      {/* Escalation badge: shown when node needs human input */}
+      {/* Escalation badge */}
       {nodeData.status === 'waiting' && (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '2px 8px',
-            background: '#fef3c7',
-            borderRadius: 9999,
-            fontSize: 10,
-            fontWeight: 600,
-            color: '#92400e',
-            width: 'fit-content',
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: '#f59e0b',
-              flexShrink: 0,
-              animation: 'pulse 1.5s ease-in-out infinite',
-            }}
-          />
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '3px 8px',
+          background: `${canvas.warning}15`,
+          border: `1px solid ${canvas.warning}40`,
+          borderRadius: 9999,
+          fontSize: 10,
+          fontWeight: 600,
+          color: canvas.warning,
+          width: 'fit-content',
+          fontFamily: 'JetBrains Mono, monospace',
+        }}>
+          <span style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: canvas.warning,
+            flexShrink: 0,
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }} />
           Needs input
         </div>
       )}
 
       {/* Budget exceeded badge */}
       {nodeData.status === 'paused_budget' && (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4,
-            padding: '2px 8px',
-            background: '#fef3c7',
-            borderRadius: 9999,
-            fontSize: 10,
-            fontWeight: 600,
-            color: '#92400e',
-            width: 'fit-content',
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: '#f59e0b',
-              flexShrink: 0,
-              animation: 'pulse 1.5s ease-in-out infinite',
-            }}
-          />
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '3px 8px',
+          background: `${canvas.warning}15`,
+          border: `1px solid ${canvas.warning}40`,
+          borderRadius: 9999,
+          fontSize: 10,
+          fontWeight: 600,
+          color: canvas.warning,
+          width: 'fit-content',
+          fontFamily: 'JetBrains Mono, monospace',
+        }}>
+          <span style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: canvas.warning,
+            flexShrink: 0,
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }} />
           Budget exceeded
         </div>
       )}
 
-      {/* Footer: View Trace button */}
+      {/* Error badge */}
+      {nodeData.status === 'error' && (
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '3px 8px',
+          background: `${canvas.error}15`,
+          border: `1px solid ${canvas.error}40`,
+          borderRadius: 9999,
+          fontSize: 10,
+          fontWeight: 600,
+          color: canvas.error,
+          width: 'fit-content',
+          fontFamily: 'JetBrains Mono, monospace',
+        }}>
+          <span style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: canvas.error,
+            flexShrink: 0,
+          }} />
+          Error
+        </div>
+      )}
+
+      {/* Footer: View Trace */}
       {nodeData.runId && (
         <button
           onClick={handleViewTrace}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
-            padding: '4px 8px',
+            gap: 5,
+            padding: '4px 10px',
             background: 'none',
-            border: '1px solid #e5e5e3',
+            border: `1px solid ${canvas.border}`,
             borderRadius: 6,
             cursor: 'pointer',
             fontSize: 11,
-            color: '#6b6b68',
+            fontFamily: 'JetBrains Mono, monospace',
+            color: canvas.textMuted,
             width: 'fit-content',
             marginTop: 'auto',
+            transition: 'border-color 150ms, color 150ms',
+          }}
+          onMouseEnter={e => {
+            (e.target as HTMLElement).style.borderColor = canvas.borderHover
+            ;(e.target as HTMLElement).style.color = canvas.text
+          }}
+          onMouseLeave={e => {
+            (e.target as HTMLElement).style.borderColor = canvas.border
+            ;(e.target as HTMLElement).style.color = canvas.textMuted
           }}
         >
           <Eye size={11} />
           View Trace
         </button>
       )}
-
-      {/* Output handle (right) */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id={`${id}-source`}
-        style={{
-          background: borderColor,
-          width: 8,
-          height: 8,
-          border: 'none',
-        }}
-      />
     </div>
   )
 }

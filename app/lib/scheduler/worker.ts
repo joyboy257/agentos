@@ -1,8 +1,10 @@
 import { Worker, WaitingChildrenError } from 'bullmq'
 import { getRedisConnection } from './client'
 import { DurableRunner } from '../runtime/durable-runner'
-import { recoverInterruptedRuns } from '../runtime/startup-recovery'
+import { recoverInterruptedRuns, recoverScheduledAgents } from '../runtime/startup-recovery'
 import { startProactiveWorker } from '../runtime/proactive-queue'
+import { startProactiveScheduler, stopProactiveScheduler } from '../runtime/proactive-scheduler'
+import { startProactiveRunWorker, stopProactiveRunWorker } from '../runtime/proactive-run-handler'
 import { COORDINATOR_QUEUE, WORKER_QUEUE } from './queues'
 import { processChildJob, type ChildJobPayload, type ChildJobResult } from '../runtime/child-job-handler'
 import { CoordinatorStep, type CoordinatorJobData, aggregateChildResults } from '../runtime/coordinator-producer'
@@ -172,15 +174,26 @@ export function getChildWorker(): Worker<ChildJobPayload, ChildJobResult> {
 // ---------------------------------------------------------------------------
 
 export async function startWorker(): Promise<void> {
+  // 1. Recover interrupted runs from previous server crash
   await recoverInterruptedRuns()
+
+  // 2. Re-register all scheduled agents with BullMQ Repeater
+  await recoverScheduledAgents()
+
+  // 3. Start all BullMQ workers
   const w = getWorker()
   await w.run()
   const cw = getCoordinatorWorker()
   await cw.run()
   const chw = getChildWorker()
   await chw.run()
+
+  // 4. Start proactive scheduler (cron Repeater) + proactive run worker
+  await startProactiveScheduler()
+  await startProactiveRunWorker()
   await startProactiveWorker()
-  console.log('BullMQ workers started (heartbeat + coordinator + child + proactive)')
+
+  console.log('BullMQ workers started (heartbeat + coordinator + child + proactive + proactive-scheduler)')
 }
 
 export async function stopWorker(): Promise<void> {
@@ -196,4 +209,6 @@ export async function stopWorker(): Promise<void> {
     await childWorker.close()
     childWorker = null
   }
+  await stopProactiveRunWorker()
+  await stopProactiveScheduler()
 }

@@ -8,11 +8,11 @@ export async function createAgent(data: {
   name: string;
   role: Agent['role'];
   config?: Record<string, unknown>;
-  schedule?: string | null;
+  schedule?: string | null;  // stored as schedule_cron in DB
   budget_ms?: number | null;
 }): Promise<Agent> {
   const result = await sql`
-    INSERT INTO agents (user_id, name, role, config, schedule, budget_ms)
+    INSERT INTO agents (user_id, name, role, config, schedule_cron, budget_ms)
     VALUES (${data.user_id}, ${data.name}, ${data.role}, ${JSON.stringify(data.config ?? {})}, ${data.schedule ?? null}, ${data.budget_ms ?? null})
     RETURNING *
   `;
@@ -33,15 +33,46 @@ export async function updateAgentStatus(id: string, status: AgentStatus): Promis
   await sql`UPDATE agents SET status = ${status}, updated_at = NOW() WHERE id = ${id}`;
 }
 
+export async function pauseAgent(id: string, reason: 'budget_exhausted'): Promise<void> {
+  // reason parameter reserved for future pause types
+  if (reason === 'budget_exhausted') {
+    await sql`
+      UPDATE agents
+      SET status = 'paused_budget', paused_budget_at = NOW(), updated_at = NOW()
+      WHERE id = ${id}
+    `
+  }
+}
+
+export async function updateAgentBudget(id: string, budgetMs: number | null): Promise<void> {
+  await sql`UPDATE agents SET budget_ms = ${budgetMs}, updated_at = NOW() WHERE id = ${id}`
+}
+
 export async function deleteAgent(id: string): Promise<void> {
   await sql`DELETE FROM agents WHERE id = ${id}`;
 }
 
+export async function updateAgentSchedule(id: string, scheduleCron: string | null): Promise<void> {
+  await sql`UPDATE agents SET schedule_cron = ${scheduleCron}, updated_at = NOW() WHERE id = ${id}`;
+}
+
+/**
+ * List all agents that have a schedule_cron set.
+ */
+export async function listAgentsWithSchedules(): Promise<Agent[]> {
+  const result = await sql`SELECT * FROM agents WHERE schedule_cron IS NOT NULL ORDER BY created_at DESC`;
+  return result.rows as Agent[];
+}
+
 // --- RUNS ---
-export async function createRun(data: { agent_id: string; user_id: string }): Promise<Run> {
+export async function createRun(data: {
+  agent_id: string;
+  user_id: string;
+  triggered_by?: 'manual' | 'proactive' | 'webhook';
+}): Promise<Run> {
   const result = await sql`
-    INSERT INTO runs (agent_id, user_id, status)
-    VALUES (${data.agent_id}, ${data.user_id}, 'running')
+    INSERT INTO runs (agent_id, user_id, status, triggered_by)
+    VALUES (${data.agent_id}, ${data.user_id}, 'running', ${data.triggered_by ?? 'manual'})
     RETURNING *
   `;
   return result.rows[0] as Run;
@@ -274,6 +305,18 @@ export async function createTeam(
   return result.rows[0];
 }
 
+// --- GMAIL TOKENS ---
+export async function getUserByGmailAddress(gmailAddress: string) {
+  const result = await sql`
+    SELECT u.*
+    FROM users u
+    JOIN gmail_tokens gt ON gt.user_id = u.id
+    WHERE gt.gmail_address = ${gmailAddress}
+    LIMIT 1
+  `
+  return result.rows[0] ?? null
+}
+
 // --- USERS ---
 export async function getUserByEmail(email: string) {
   const result = await sql`SELECT * FROM users WHERE email = ${email}`;
@@ -420,14 +463,16 @@ export async function setGmailToken(data: {
   access_token: string;
   refresh_token?: string | null;
   expires_at?: Date | null;
+  gmail_address?: string | null;
 }): Promise<void> {
   await sql`
-    INSERT INTO gmail_tokens (user_id, access_token, refresh_token, expires_at)
-    VALUES (${data.user_id}, ${data.access_token}, ${data.refresh_token ?? null}, ${data.expires_at?.toISOString() ?? null})
+    INSERT INTO gmail_tokens (user_id, access_token, refresh_token, expires_at, gmail_address)
+    VALUES (${data.user_id}, ${data.access_token}, ${data.refresh_token ?? null}, ${data.expires_at?.toISOString() ?? null}, ${data.gmail_address ?? null})
     ON CONFLICT (user_id) DO UPDATE SET
       access_token = EXCLUDED.access_token,
       refresh_token = EXCLUDED.refresh_token,
-      expires_at = EXCLUDED.expires_at
+      expires_at = EXCLUDED.expires_at,
+      gmail_address = EXCLUDED.gmail_address
   `;
 }
 
@@ -623,6 +668,7 @@ export async function resolveGovernanceAction(
 // --- TEAMS ---
 export interface TeamRow {
   id: string
+  user_id?: string
   canvas_id: string
   name: string
   coordinator_session_id: string | null

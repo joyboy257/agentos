@@ -316,12 +316,12 @@ export default function ActivityPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f0f0ec', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--ui-bg)', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
       {/* Header */}
-      <div style={{ padding: '24px 32px 16px', borderBottom: '1px solid #e5e5e3', background: '#ffffff' }}>
+      <div style={{ padding: '24px 32px 16px', borderBottom: '1px solid var(--ui-border)', background: 'var(--ui-surface)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a1a18' }}>Activity Log</h1>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--ui-text)', fontFamily: "'IBM Plex Serif', Georgia, serif" }}>Activity Log</h1>
             <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6b6b68' }}>
               Runs are retained for 90 days
             </p>
@@ -347,7 +347,7 @@ export default function ActivityPage() {
       </div>
 
       {/* Tab bar — Runs vs Learned Facts */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #e5e5e3', background: '#ffffff', padding: '0 32px' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--ui-border)', background: 'var(--ui-surface)', padding: '0 32px' }}>
         {(['runs', 'learned'] as const).map(tab => (
           <button
             key={tab}
@@ -497,9 +497,9 @@ export default function ActivityPage() {
 
       <style>{`
         .skeleton {
-          background: linear-gradient(90deg, #f0f0ec 25%, #e5e5e3 50%, #f0f0ec 75%);
+          background: linear-gradient(90deg, var(--ui-bg) 25%, var(--ui-border) 50%, var(--ui-bg) 75%);
           background-size: 200% 100%;
-          animation: shimmer 1.5s infinite;
+          animation: shimmer 1.8s infinite;
         }
         @keyframes shimmer {
           0% { background-position: 200% 0; }

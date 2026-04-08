@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSessionFromCookie } from '@/lib/auth/session'
-import { createAgent } from '@/lib/db/queries'
+import { createAgent, updateAgentSchedule } from '@/lib/db/queries'
+import { registerAgentSchedule } from '@/lib/runtime/proactive-scheduler'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -12,6 +13,7 @@ interface NLAgent {
   archetype?: 'Ingest' | 'Process' | 'Distill'
   tools: string[]
   description?: string
+  schedule?: string | null   // cron expression, e.g. '0 7 * * 1-5'
   position_x: number
   position_y: number
 }
@@ -33,8 +35,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ agents: [] })
   }
 
-  // Map NL agent role ('worker') to DB role enum
-  // 'research_agent' is used as the default for canvas-created agents
   const dbRole = 'research_agent'
 
   const created = await Promise.all(
@@ -50,7 +50,18 @@ export async function POST(req: NextRequest) {
           tools: agent.tools,
           description: agent.description ?? null,
         },
+        schedule: agent.schedule ?? null,
       })
+
+      // If a schedule was provided, register it with the proactive scheduler
+      if (agent.schedule) {
+        await updateAgentSchedule(createdAgent.id, agent.schedule)
+        // Fire and forget — failure to schedule doesn't fail agent creation
+        void registerAgentSchedule(createdAgent.id, agent.schedule).catch(err => {
+          console.warn(`[from-nl] Failed to register schedule for agent ${createdAgent.id}:`, err)
+        })
+      }
+
       return {
         id: createdAgent.id,
         nl_agent_id: agent.id,

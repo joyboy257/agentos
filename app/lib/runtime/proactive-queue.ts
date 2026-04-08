@@ -62,6 +62,14 @@ export function getProactiveWorker(): Worker {
         const payload = job.data as GmailPushPayload;
         console.log(`[ProactiveQueue] gmail_push job fired for agent ${payload.agentId}`);
 
+        // Skip if agent is paused (e.g. budget exhausted)
+        const { getAgent } = await import('../db/queries')
+        const agent = await getAgent(payload.agentId)
+        if (agent && agent.status === 'paused_budget') {
+          console.log(`[ProactiveQueue] Agent ${payload.agentId} is paused (budget) — skipping`)
+          return { runId: null, status: 'skipped', reason: 'agent_paused_budget' }
+        }
+
         const runner = new DurableRunner();
         const result = await runner.execute({
           agentId: payload.agentId,

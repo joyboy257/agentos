@@ -52,7 +52,8 @@ export default function SkillsPage() {
       style={{
         flex: 1,
         overflowY: 'auto',
-        background: '#0a0a0f',
+        background: 'var(--ui-bg)',
+        minHeight: '100vh',
       }}
     >
       <div

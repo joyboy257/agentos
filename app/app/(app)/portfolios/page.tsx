@@ -71,13 +71,13 @@ export default function PortfoliosPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0f0f0f', color: '#fff', padding: '40px 24px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--ui-bg)', color: 'var(--ui-text)', padding: '40px 24px' }}>
       {/* Header */}
       <div style={{ maxWidth: 1200, margin: '0 auto', marginBottom: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>Canvases</h1>
-            <p style={{ color: '#9ca3af', margin: '8px 0 0', fontSize: 15 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, fontFamily: "'IBM Plex Serif', Georgia, serif", color: 'var(--ui-text)' }}>Canvases</h1>
+            <p style={{ color: 'var(--ui-text-secondary)', margin: '8px 0 0', fontSize: 15 }}>
               Your AI teams, organized by domain
             </p>
           </div>

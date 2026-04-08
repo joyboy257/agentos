@@ -6,7 +6,7 @@ export interface Agent {
   role: 'research_agent' | 'support_agent';
   config: Record<string, unknown>;
   status: AgentStatus;
-  schedule: string | null;
+  schedule_cron: string | null;
   budget_ms: number | null;
   created_at: Date;
   updated_at: Date;
@@ -19,6 +19,7 @@ export interface Run {
   agent_id: string;
   user_id: string;
   status: RunStatus;
+  triggered_by?: 'manual' | 'proactive' | 'webhook' | null;
   session_id?: string | null;
   started_at: Date | null;
   completed_at: Date | null;

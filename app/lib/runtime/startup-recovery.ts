@@ -1,19 +1,21 @@
 /**
  * Startup Auto-Recovery
  *
- * When the server restarts, any runs that were 'running' at death must be
- * detected and recovered. This runs on every worker startup before accepting
- * new jobs.
+ * When the server restarts:
+ * 1. Any runs that were 'running' at death are detected and recovered
+ * 2. All agents with schedule_cron are re-registered with BullMQ Repeater
  *
  * Recovery protocol:
  * 1. Find all runs with status = 'running'
  * 2. For each: call DurableRunner.resume(runId)
  *    - resume() will either complete the run or surface pending approvals
  * 3. Log recovery attempts
+ * 4. Re-register all scheduled agents with BullMQ
  */
 
 import { sql } from '@vercel/postgres';
 import { DurableRunner } from './durable-runner';
+import { registerAllScheduledAgents } from './proactive-scheduler';
 
 const RECOVERY_LOG = '[Recovery]';
 
@@ -58,4 +60,15 @@ export async function recoverInterruptedRuns(): Promise<void> {
   console.log(
     `${RECOVERY_LOG} Recovery complete: ${recovered} recovered, ${failed} failed`
   );
+}
+
+/**
+ * Re-register all agents with schedule_cron with BullMQ on startup.
+ */
+export async function recoverScheduledAgents(): Promise<void> {
+  try {
+    await registerAllScheduledAgents()
+  } catch (err) {
+    console.error(`${RECOVERY_LOG} Failed to register scheduled agents:`, err)
+  }
 }

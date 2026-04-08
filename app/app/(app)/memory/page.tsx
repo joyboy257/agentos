@@ -141,8 +141,8 @@ export default function MemoryPage() {
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        background: '#f0f0ec',
-        fontFamily: 'system-ui, sans-serif',
+        background: 'var(--ui-bg)',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
       {/* Header */}
@@ -274,9 +274,9 @@ export default function MemoryPage() {
 
       <style>{`
         .skeleton {
-          background: linear-gradient(90deg, #f0f0ec 25%, #e5e5e3 50%, #f0f0ec 75%);
+          background: linear-gradient(90deg, var(--ui-bg) 25%, var(--ui-border) 50%, var(--ui-bg) 75%);
           background-size: 200% 100%;
-          animation: shimmer 1.5s infinite;
+          animation: shimmer 1.8s infinite;
         }
         @keyframes shimmer {
           0% { background-position: 200% 0; }

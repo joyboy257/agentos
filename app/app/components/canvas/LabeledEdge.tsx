@@ -64,13 +64,13 @@ function LabeledEdge({
         markerEnd={markerEnd}
         style={{
           ...style,
-          stroke: selected ? '#5b4fe9' : '#a3a3d0',
-          strokeWidth: selected ? 2.5 : 2,
+          stroke: selected ? '#7c3aed' : '#3e3e4e',
+          strokeWidth: selected ? 2.5 : 1.5,
           transition: 'stroke 0.15s, stroke-width 0.15s',
         }}
       />
 
-      {/* Wire label (always visible, small) */}
+      {/* Wire label */}
       {label && (
         <EdgeLabelRenderer>
           <div
@@ -79,11 +79,12 @@ function LabeledEdge({
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               fontSize: 10,
               fontWeight: 500,
-              color: '#6b6b68',
-              background: '#ffffff',
+              fontFamily: 'JetBrains Mono, monospace',
+              color: '#6b6b7b',
+              background: '#12121a',
               padding: '2px 6px',
               borderRadius: 4,
-              border: '1px solid #e5e5e3',
+              border: '1px solid #1e1e2e',
               pointerEvents: 'all',
               userSelect: 'none',
             }}
@@ -103,13 +104,14 @@ function LabeledEdge({
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${tooltipPos.x}px, ${tooltipPos.y}px)`,
-              background: '#1c1c1a',
-              color: '#ffffff',
-              padding: '8px 12px',
+              background: '#12121a',
+              color: '#e5e5e5',
+              padding: '10px 14px',
               borderRadius: 8,
               fontSize: 12,
               lineHeight: 1.5,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              border: '1px solid #1e1e2e',
               pointerEvents: 'none',
               zIndex: 100,
               minWidth: 160,
@@ -117,17 +119,14 @@ function LabeledEdge({
             }}
             className="nodrag nopan"
           >
-            <div style={{ fontWeight: 600, marginBottom: 4, color: '#e5e5e3', fontSize: 11 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4, color: '#e5e5e5', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>
               Data Flow
             </div>
-            <div style={{ color: '#a3a3a0', marginBottom: 2 }}>
-              <span style={{ color: '#ffffff' }}>{label}</span>
+            <div style={{ color: '#6b6b7b', marginBottom: 2 }}>
+              <span style={{ color: '#e5e5e5' }}>{label}</span>
             </div>
-            <div style={{ fontSize: 11, color: '#6b6b68', marginTop: 6, borderTop: '1px solid #3a3a3a', paddingTop: 6 }}>
-              Source: <span style={{ color: '#a3a3d0' }}>{source}</span>
-            </div>
-            <div style={{ fontSize: 11, color: '#6b6b68' }}>
-              Target: <span style={{ color: '#a3a3d0' }}>{target}</span>
+            <div style={{ fontSize: 11, color: '#3e3e4e', marginTop: 6, borderTop: '1px solid #1e1e2e', paddingTop: 6, fontFamily: 'JetBrains Mono, monospace' }}>
+              {source} → {target}
             </div>
           </div>
         </EdgeLabelRenderer>

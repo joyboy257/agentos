@@ -1,4 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
+  /* ── Canvas (Railway dark) ─────────────────────────────────────── */
+  --canvas-bg: #0a0a0f;
+  --canvas-panel: #12121a;
+  --canvas-panel-hover: #1a1a24;
+  --canvas-border: #1e1e2e;
+  --canvas-border-hover: #2e2e3e;
+  --canvas-border-accent: #7c3aed;
+  --canvas-text: #e5e5e5;
+  --canvas-text-muted: #6b6b7b;
+  --canvas-text-dim: #3e3e4e;
+  --canvas-accent: #7c3aed;
+  --canvas-active: #2dd4bf;
+  --canvas-grid: #1e1e2e;
+  --canvas-success: #22c55e;
+  --canvas-warning: #f59e0b;
+  --canvas-error: #ef4444;
+  --canvas-info: #60a5fa;
+
+  /* ── Company UI (Paperclip warm) ──────────────────────────────── */
+  --ui-bg: #FAFAF8;
+  --ui-surface: #FFFFFF;
+  --ui-border: #E5E5E3;
+  --ui-text: #1C1C1A;
+  --ui-text-secondary: #6B6B68;
+  --ui-text-tertiary: #A3A3A0;
+  --ui-accent: #5B4FE9;
+  --ui-accent-hover: #4A3ED8;
+  --ui-accent-subtle: #EEF0FC;
+
+  /* ── Legacy aliases (gradual migration) ───────────────────────── */
   --bg: #0a0a0f;
   --panel: #12121a;
   --border: #1e1e2e;
@@ -59,13 +91,29 @@ html, body {
 
 .spin { animation: spin 1s linear infinite; }
 
-/* Canvas grid background */
+/* ── Dot-grid canvas background ────────────────────────────────── */
 .canvas-grid {
-  background-color: var(--bg);
-  background-image:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background-color: var(--canvas-bg);
+  background-image: radial-gradient(circle, var(--canvas-grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* ── Canvas node entrance ─────────────────────────────────────── */
+@keyframes nodeEnter {
+  from { opacity: 0; transform: scale(0.95) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── Wire travel dot (active data flow) ──────────────────────── */
+@keyframes wireTravel {
+  from { stroke-dashoffset: 24; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* ── Escalation amber pulse ───────────────────────────────────── */
+@keyframes escalationPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50%       { opacity: 0.85; box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
 }
 
 /* Pulse animation for running status */

@@ -35,6 +35,10 @@ export interface ToolResult {
 const DEFAULT_TOOL_TIMEOUTS: Record<string, number> = {
   'web.search': 15_000,
   'llm': 120_000,
+  'instagram.media.list': 30_000,
+  'instagram.profile.get': 15_000,
+  'instagram.posts.create': 60_000,
+  'instagram.posts.draft': 30_000,
 }
 
 /**
