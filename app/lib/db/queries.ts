@@ -668,6 +668,7 @@ export async function resolveGovernanceAction(
 // --- TEAMS ---
 export interface TeamRow {
   id: string
+  user_id?: string
   canvas_id: string
   name: string
   coordinator_session_id: string | null

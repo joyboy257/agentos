@@ -55,17 +55,17 @@ let redisSub: import('ioredis').Redis | null = null
 function getRedisPub(): import('ioredis').Redis {
   if (!redisPub) {
     const { getRedisConnection } = require('../scheduler/client')
-    redisPub = getRedisConnection().duplicate()
+    redisPub = getRedisConnection().duplicate() as import('ioredis').Redis
   }
-  return redisPub
+  return redisPub!
 }
 
 function getRedisSub(): import('ioredis').Redis {
   if (!redisSub) {
     const { getRedisConnection } = require('../scheduler/client')
-    redisSub = getRedisConnection().duplicate()
+    redisSub = getRedisConnection().duplicate() as import('ioredis').Redis
   }
-  return redisSub
+  return redisSub!
 }
 
 /** Channel prefix for a team's lane events on Redis. */
@@ -86,7 +86,7 @@ const redisBus = new Map<string, Set<LaneEventHandler>>()
 function subscribeToRedisChannel(tid: string): void {
   const ch = teamChannel(tid)
   const sub = getRedisSub()
-  void sub.subscribe(ch).then((result: string) => {
+  void sub.subscribe(ch).then((result: unknown) => {
     if (result !== 'subscribe') {
       console.warn(`[LaneEvents] Failed to subscribe to Redis channel ${ch}: ${result}`)
     }

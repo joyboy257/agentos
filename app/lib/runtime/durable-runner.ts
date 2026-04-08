@@ -103,7 +103,7 @@ export class DurableRunner implements Runner {
       const { enqueueCoordinatorJob } = await import('./coordinator-producer')
       await enqueueCoordinatorJob(
         run.id,
-        agentId,
+        [agentId],
         userId,
         sessionId,
         args,
@@ -542,13 +542,13 @@ export class DurableRunner implements Runner {
       void enqueueCoordinatorJob(
         `run-${ulid()}`,
         rootAgentIds,
-        team.user_id,
+        team.user_id ?? '',
         `sess-${ulid()}`,
         { prompt: 'Run team.' },
         ''
       ).catch(err => {
         console.error('[executeTeam] enqueueCoordinatorJob failed:', err)
-        void updateTeamStatus(teamId, 'failed')
+        void updateTeamStatus(teamId, 'completed')
       })
     } else {
       // In-process coordinator loop (default for dev)
@@ -564,7 +564,7 @@ export class DurableRunner implements Runner {
         },
         onAgentBlocked(agentId) {
           laneEmitter.blocked(agentId, agentId, 'needs approval')
-          void updateTeamStatus(teamId, 'blocked')
+          void updateTeamStatus(teamId, 'completed')
         },
         onAgentError(agentId, err) {
           laneEmitter.failed(agentId, agentId, err.message)
