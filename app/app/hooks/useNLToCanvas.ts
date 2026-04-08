@@ -37,11 +37,19 @@ export type PromptBarState =
   | 'preview'
   | 'error'
 
+export interface GovernanceInfo {
+  required: boolean
+  actionId: string
+  newTools: string[]
+  explanation: string
+}
+
 export interface NLToCanvasResult {
   graph: PreviewGraph
   explanation: string
   confidence: number
   ambiguousFields?: string[]
+  governance?: GovernanceInfo
 }
 
 const PLACEHOLDERS = [
@@ -138,6 +146,23 @@ export function useNLToCanvas(teamId: string) {
         }
 
         const data = result
+
+        // Governance required — show Maria the governance message instead of a graph
+        if (data.governance_required) {
+          setPreview({
+            graph: { agents: [], connections: [] },
+            explanation: data.explanation ?? 'This agent needs your approval before activation.',
+            confidence: 0,
+            governance: {
+              required: true,
+              actionId: data.governanceActionId ?? '',
+              newTools: data.new_tools ?? [],
+              explanation: data.explanation ?? '',
+            },
+          })
+          setState('preview')
+          return
+        }
 
         if (!data.graph) {
           setError('Invalid response from interpreter')

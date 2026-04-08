@@ -192,5 +192,8 @@ function normalizeWorkerResponse(data: any): NLToCanvasResponse {
     options: data.options,
     ambiguousFields: data.ambiguousFields,
     error: data.error,
+    governance_required: data.governance_required,
+    governanceActionId: data.governanceActionId,
+    new_tools: data.new_tools,
   }
 }
