@@ -1,5 +1,8 @@
 import { gmail } from '@googleapis/gmail'
-import { getGmailToken, setGmailToken } from '../db/queries'
+import { nanoid } from 'nanoid'
+import { getCredential, saveCredential } from '../db/queries'
+import { decrypt, encrypt } from '../crypto'
+import { refreshAccessToken } from './oauth'
 
 export interface GmailClient {
   accessToken: string;
@@ -12,22 +15,59 @@ export function createGmailClient(accessToken: string) {
   return gmailClient
 }
 
+interface StoredGmailTokens {
+  access_token: string
+  refresh_token?: string
+}
+
 export async function getGmailClientForUser(userId: string): Promise<GmailClient | null> {
-  const token = await getGmailToken(userId)
+  const credential = await getCredential(userId, 'gmail')
 
-  if (!token) return null
+  if (!credential) return null
 
-  // Check if token is expired (with 5-min buffer)
-  if (token.expires_at && new Date(token.expires_at) < new Date(Date.now() + 5 * 60 * 1000)) {
-    // Token expired — in Phase 1, users need to re-authenticate
-    // Full refresh flow deferred to Phase 2
+  let tokens: StoredGmailTokens
+  try {
+    tokens = JSON.parse(decrypt(credential.encrypted_token)) as StoredGmailTokens
+  } catch {
     return null
   }
 
+  // Check if token is expired (with 5-min buffer)
+  if (credential.expires_at && new Date(credential.expires_at) < new Date(Date.now() + 5 * 60 * 1000)) {
+    if (!tokens.refresh_token) {
+      return null
+    }
+
+    try {
+      const refreshed = await refreshAccessToken(tokens.refresh_token)
+      tokens = {
+        access_token: refreshed.access_token,
+        refresh_token: refreshed.refresh_token ?? tokens.refresh_token,
+      }
+
+      const expiresAt = new Date(Date.now() + Number(refreshed.expires_in ?? 3600) * 1000)
+      await saveCredential(
+        nanoid(),
+        userId,
+        'gmail',
+        encrypt(JSON.stringify(tokens)),
+        expiresAt
+      )
+
+      return {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresAt,
+      }
+    } catch {
+      return null
+    }
+  }
+
   return {
-    accessToken: token.access_token,
-    refreshToken: token.refresh_token ?? undefined,
-    expiresAt: token.expires_at ?? undefined,
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    expiresAt: credential.expires_at ?? undefined,
   }
 }
 
@@ -38,13 +78,19 @@ export async function saveGmailTokenForUser(
   expiresAt?: Date,
   gmailAddress?: string
 ): Promise<void> {
-  await setGmailToken({
-    user_id: userId,
-    access_token: accessToken,
-    refresh_token: refreshToken ?? null,
-    expires_at: expiresAt ?? null,
-    gmail_address: gmailAddress ?? null,
-  })
+  await saveCredential(
+    nanoid(),
+    userId,
+    'gmail',
+    encrypt(
+      JSON.stringify({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        gmail_address: gmailAddress,
+      })
+    ),
+    expiresAt ?? null
+  )
 }
 
 export async function listEmails(accessToken: string, query: string = 'is:unread newer_than:1d') {

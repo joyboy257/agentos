@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useNodesState, useEdgesState } from '@xyflow/react'
 import type { Node, Edge } from '@xyflow/react'
 import { ulid } from 'ulid'
@@ -55,6 +55,31 @@ export interface AgentNodeData extends Record<string, unknown> {
 }
 
 export type CanvasNode = Node<AgentNodeData, 'agent'>
+type TeamMemberSnapshot = { agentId: string; name: string; status: string }
+
+function laneEventToNodeStatus(laneEvent: LaneEvent): NodeStatus {
+  if (laneEvent.status === 'running') return 'running'
+  if (laneEvent.status === 'failed') return 'error'
+  if (laneEvent.status === 'blocked' || laneEvent.type === 'lane.waiting') return 'waiting'
+  if (laneEvent.status === 'completed' || laneEvent.status === 'green') return 'idle'
+  return 'idle'
+}
+
+function nodeStatusToTeamMemberStatus(status: NodeStatus): string {
+  if (status === 'error') return 'failed'
+  if (status === 'waiting' || status === 'paused_budget') return 'blocked'
+  if (status === 'running') return 'running'
+  if (status === 'scheduled') return 'scheduled'
+  return 'idle'
+}
+
+function summarizeCoordinatorStatus(teamMembers: TeamMemberSnapshot[], fallback: NodeStatus): NodeStatus {
+  if (teamMembers.some((member) => member.status === 'running')) return 'running'
+  if (teamMembers.some((member) => member.status === 'failed')) return 'error'
+  if (teamMembers.some((member) => member.status === 'blocked')) return 'waiting'
+  if (teamMembers.length === 0) return fallback === 'running' ? 'idle' : fallback
+  return 'idle'
+}
 
 interface CanvasContextValue {
   nodes: CanvasNode[]
@@ -199,8 +224,51 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
   const [teamId, setTeamId] = useState<string | undefined>(undefined)
   const [teamMembers, setTeamMembers] = useState<Map<string, { name: string; status: string }>>(new Map())
   const [laneEvents, setLaneEvents] = useState<LaneEvent[]>([])
+  const autosaveSkipRef = useRef(true)
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const nodesRef = useRef<CanvasNode[]>([])
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null
+
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
+
+  const persistCanvas = useCallback(async (
+    targetCanvasId: string,
+    nextNodes: CanvasNode[],
+    nextEdges: Edge[]
+  ) => {
+    const serializedNodes = nextNodes
+      .filter((node) => node.data.role !== 'Team Lead')
+      .map((node) => ({
+        id: node.id,
+        name: node.data.name,
+        role: node.data.role,
+        archetype: node.data.archetype,
+        tools: node.data.tools ?? [],
+        position_x: node.position.x,
+        position_y: node.position.y,
+      }))
+
+    const serializedEdges = nextEdges
+      .filter((edge) => edge.source && edge.target)
+      .map((edge) => ({
+        source: edge.source,
+        target: edge.target,
+      }))
+
+    await fetch(`/api/canvases/${targetCanvasId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agents_json: serializedNodes,
+        connections_json: serializedEdges,
+      }),
+    }).catch((err) => {
+      console.error('[CanvasProvider] autosave failed:', err)
+    })
+  }, [])
 
   const loadCanvas = async (id: string) => {
     setCanvasLoading(true)
@@ -251,6 +319,7 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
           lastRunAt: null,
           nextWakeAt: null,
           budgetUsedPercent: 0,
+          isCoordinator: agent.role === 'Team Lead',
         },
       }))
 
@@ -277,6 +346,7 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
             workerCount: loadedNodes.length,
             nextWakeAt: null,
             budgetUsedPercent: 0,
+            isCoordinator: true,
           },
         })
         loadedEdges.unshift({
@@ -291,6 +361,8 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
       setNodes(loadedNodes)
       setEdges(loadedEdges)
       setSelectedNodeId(null)
+      setTeamMembers(new Map())
+      setLaneEvents([])
 
       // Fetch the team for this canvas and set teamId — this triggers
       // the useEffect in CanvasContent that calls subscribeToLaneEvents(teamId)
@@ -319,15 +391,66 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
   // Load canvas when canvasId prop changes
   useEffect(() => {
     if (canvasId) {
+      autosaveSkipRef.current = true
       loadCanvas(canvasId)
     } else {
       setNodes([])
       setEdges([])
       setCurrentCanvasId(null)
       setTeamId(undefined)
+      setTeamMembers(new Map())
+      setLaneEvents([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId])
+
+  // Track structural vs runtime node changes to avoid autosave hammering
+  // Runtime fields (status, run metrics) change frequently during team runs and
+  // should not trigger canvas autosave — only structural/layout changes matter.
+  const structuralNodesRef = useRef<CanvasNode[]>([])
+
+  useEffect(() => {
+    if (!currentCanvasId || canvasLoading) return
+
+    if (autosaveSkipRef.current) {
+      autosaveSkipRef.current = false
+      return
+    }
+
+    // Skip autosave when only runtime fields (status, run metrics) changed.
+    // persistCanvas serializes nodes without runtime fields, so structural
+    // equality is sufficient to detect real layout changes.
+    const structuralChanged = nodes.some((node, i) => {
+      const prev = structuralNodesRef.current[i]
+      if (!prev) return true
+      return (
+        prev.position.x !== node.position.x ||
+        prev.position.y !== node.position.y ||
+        prev.data.name !== node.data.name ||
+        prev.data.role !== node.data.role ||
+        JSON.stringify(prev.data.tools) !== JSON.stringify(node.data.tools) ||
+        prev.data.archetype !== node.data.archetype
+      )
+    })
+
+    if (!structuralChanged) return
+
+    structuralNodesRef.current = nodes.map((n) => ({ ...n }))
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      void persistCanvas(currentCanvasId, nodes, edges)
+    }, 400)
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+      }
+    }
+  }, [currentCanvasId, canvasLoading, edges, nodes, persistCanvas])
 
   const addGraphAgents = (
     agents: Array<{
@@ -368,17 +491,17 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
       data: { label: 'feeds' },
     }))
 
-    // Also wire each new worker to the Team Lead
-    const teamLeadEdge: Edge = {
+    // Wire every new worker to the Team Lead
+    const teamLeadEdges: Edge[] = agents.map((agent) => ({
       id: `nl-tl-${ulid()}`,
       source: 'team-lead-1',
-      target: agents[0]?.id ?? '',
+      target: agent.id,
       type: 'labeled',
       data: { label: 'triggers' },
-    }
+    }))
 
     setNodes((prev) => [...prev, ...newNodes])
-    setEdges((prev) => [...prev, ...newEdges, teamLeadEdge].filter(e => e.target !== ''))
+    setEdges((prev) => [...prev, ...newEdges, ...teamLeadEdges].filter(e => e.target !== ''))
   }
 
   /**
@@ -404,11 +527,13 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
           return next.length > 200 ? next.slice(-200) : next
         })
 
-        // Update teamMembers map: agentId → { name, status }
-        // Use the canvas node's display name when available
+        // Keep an external lane-status snapshot for navigator and coordinator views.
         setTeamMembers((prev) => {
           const next = new Map(prev)
-          const nodeName = nodes.find(n => n.id === laneEvent.agent_id)?.data.name ?? laneEvent.agent_id
+          const matchingNode = nodesRef.current.find(
+            (node) => node.id === laneEvent.agent_id || node.data.name === laneEvent.agent_id
+          )
+          const nodeName = matchingNode?.data.name ?? next.get(laneEvent.agent_id)?.name ?? laneEvent.agent_id
           next.set(laneEvent.agent_id, {
             name: nodeName,
             status: laneEvent.status,
@@ -416,29 +541,49 @@ export function CanvasProvider({ children, canvasId }: { children: ReactNode; ca
           return next
         })
 
-        // Also propagate to the corresponding node's status if it exists in the graph
-        setNodes((prev) =>
-          prev.map((n) =>
-            n.id === laneEvent.agent_id || n.data.name === laneEvent.agent_id
-              ? {
-                  ...n,
-                  data: {
-                    ...n.data,
-                    status:
-                      laneEvent.status === 'running'
-                        ? ('running' as NodeStatus)
-                        : laneEvent.status === 'completed'
-                          ? ('idle' as NodeStatus)
-                          : laneEvent.status === 'failed'
-                            ? ('error' as NodeStatus)
-                            : laneEvent.status === 'blocked'
-                              ? ('waiting' as NodeStatus)
-                              : n.data.status,
-                  },
-                }
-              : n
-          )
-        )
+        const nextNodeStatus = laneEventToNodeStatus(laneEvent)
+
+        setNodes((prev) => {
+          const workerNodes = prev.map((node) => {
+            if (node.data.role === 'Team Lead') return node
+            if (node.id !== laneEvent.agent_id && node.data.name !== laneEvent.agent_id) return node
+
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: nextNodeStatus,
+              },
+            }
+          })
+
+          const nextTeamMembers = workerNodes
+            .filter((node) => node.data.role === 'Worker')
+            .map((node) => ({
+              agentId: node.id,
+              name: node.data.name,
+              status: nodeStatusToTeamMemberStatus(node.data.status),
+            }))
+
+          const coordinatorStatus = summarizeCoordinatorStatus(nextTeamMembers, nextNodeStatus)
+          const nextNodes = workerNodes.map((node) => {
+            if (node.data.role !== 'Team Lead') return node
+
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                isCoordinator: true,
+                workerCount: nextTeamMembers.length,
+                teamMembers: nextTeamMembers,
+                status: coordinatorStatus,
+              },
+            }
+          })
+
+          nodesRef.current = nextNodes
+          return nextNodes
+        })
       } catch (err) {
         console.error('[CanvasProvider] lane event parse error:', err)
       }

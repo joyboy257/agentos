@@ -16,12 +16,11 @@ import { isSlackConnected, sendMessage as sendSlackMessage, getSlackToken, listC
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? 'mailto:admin@agentos.ai'
+const WEB_PUSH_ENABLED = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY)
 
-if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-  throw new Error('Missing VAPID keys: set NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars')
+if (WEB_PUSH_ENABLED) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY!, VAPID_PRIVATE_KEY!)
 }
-
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
 
 export { VAPID_PUBLIC_KEY }
 
@@ -76,7 +75,7 @@ export async function sendApprovalPush(params: {
             ``,
             `*Waiting on:* ${summary}`,
             ``,
-            `_View and approve at ${process.env.NEXT_PUBLIC_APP_URL}/runs/${runId}_`,
+            `_View and approve at ${process.env.NEXT_PUBLIC_APP_URL}/app/canvas?run=${runId}_`,
           ].join('\n')
           await sendSlackMessage(token, defaultChannel.id, text)
         }
@@ -87,6 +86,10 @@ export async function sendApprovalPush(params: {
   }
 
   // ── Web Push notification transport ────────────────────────────────────────
+  if (!WEB_PUSH_ENABLED) {
+    return
+  }
+
   const result = await sql`
     SELECT endpoint, p256dh, auth
     FROM push_subscriptions
@@ -139,51 +142,20 @@ export async function sendBudgetExhaustedPush(params: {
 }): Promise<void> {
   const { agentId, userId, agentName, budgetMs, elapsedMs } = params
 
-  const budgetDollars = (budgetMs / 1000 * 0.001).toFixed(2) // rough conversion
-
-  // ── Slack notification transport ────────────────────────────────────────────
-  if (await isSlackConnected(userId)) {
-    const token = await getSlackToken(userId)
-    if (token) {
-      try {
-        const { channels } = await listChannels(token, 10)
-        const defaultChannel = channels.find((c) => c.name === 'general') ?? channels[0]
-        if (defaultChannel) {
-          const text = [
-            `*Agent paused — ${agentName}*`,
-            ``,
-            `Budget of $${budgetDollars} has been reached.`,
-            ``,
-            `_Add more budget at ${process.env.NEXT_PUBLIC_APP_URL}/settings/agents_`,
-          ].join('\n')
-          await sendSlackMessage(token, defaultChannel.id, text)
-        }
-      } catch (err) {
-        console.error('[push] slack send error:', err)
-      }
-    }
-  }
-
-  // ── Web Push notification transport ────────────────────────────────────────
   const result = await sql`
     SELECT endpoint, p256dh, auth
     FROM push_subscriptions
     WHERE user_id = ${userId}
   `
 
-  if (result.rows.length === 0) return
-
+  const percentUsed = Math.min(100, Math.round((elapsedMs / budgetMs) * 100))
   const payload = JSON.stringify({
-    title: 'Agent paused — budget reached',
-    body: `${agentName} paused — budget of $${budgetDollars} reached. Tap to add more budget.`,
+    title: 'Agent paused — budget exceeded',
+    body: `${agentName} used ${percentUsed}% of its budget`,
     icon: '/icon-192.png',
     badge: '/badge-72.png',
     tag: `budget-${agentId}`,
-    data: { agentId, type: 'budget_exhausted' },
-    actions: [
-      { action: 'add_budget', title: 'Add budget' },
-      { action: 'view', title: 'View agent' },
-    ],
+    data: { agentId },
   })
 
   for (const row of result.rows) {
@@ -198,104 +170,43 @@ export async function sendBudgetExhaustedPush(params: {
       if (statusCode === 404 || statusCode === 410) {
         await sql`DELETE FROM push_subscriptions WHERE endpoint = ${row.endpoint}`
       } else {
-        console.error('[push] send error:', err)
+        console.error('[push] budget exhaustion send error:', err)
       }
     }
   }
 }
 
 /**
- * Save a push subscription for a user (called from /api/push/subscribe).
- */
-export async function savePushSubscription(params: {
-  userId: string
-  endpoint: string
-  p256dh: string
-  auth: string
-}): Promise<void> {
-  const { userId, endpoint, p256dh, auth } = params
-  await sql`
-    INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
-    VALUES (gen_random_uuid(), ${userId}, ${endpoint}, ${p256dh}, ${auth}, NOW())
-    ON CONFLICT (endpoint) DO UPDATE SET
-      p256dh = EXCLUDED.p256dh,
-      auth = EXCLUDED.auth
-  `
-}
-
-/**
- * Delete a push subscription (called when user opts out).
- */
-export async function deletePushSubscription(endpoint: string): Promise<void> {
-  await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`
-}
-
-/**
- * Send a push notification when a proactive (scheduled) agent run completes.
- * Tells Maria what the agent did while she slept.
- *
- * Title example: "Email Agent ran at 7am — 3 emails processed"
+ * Send a push notification for a proactive (scheduled/cron) agent run.
  */
 export async function sendProactiveRunPush(params: {
   agentId: string
-  agentName: string
   userId: string
+  agentName: string
   runId: string
   status: string
   cronExpression?: string
 }): Promise<void> {
-  const { agentName, userId, runId, status } = params
+  const { agentId, userId, agentName, runId, status, cronExpression } = params
 
-  const summary = status === 'completed'
-    ? `${agentName} completed its scheduled run successfully.`
-    : status === 'waiting_for_approval'
-    ? `${agentName} completed — 1 escalation needs your input.`
-    : `${agentName} run ended with status: ${status}.`
-
-  const title = `${agentName} ran on schedule`
-
-  // ── Slack notification transport ────────────────────────────────────────────
-  if (await isSlackConnected(userId)) {
-    const token = await getSlackToken(userId)
-    if (token) {
-      try {
-        const { channels } = await listChannels(token, 10)
-        const defaultChannel = channels.find((c) => c.name === 'general') ?? channels[0]
-        if (defaultChannel) {
-          const text = [
-            `*${title}*`,
-            ``,
-            `_${summary}_`,
-            ``,
-            `_View run at ${process.env.NEXT_PUBLIC_APP_URL}/runs/${runId}_`,
-          ].join('\n')
-          await sendSlackMessage(token, defaultChannel.id, text)
-        }
-      } catch (err) {
-        console.error('[push] proactive run slack send error:', err)
-      }
-    }
-  }
-
-  // ── Web Push notification transport ────────────────────────────────────────
   const result = await sql`
     SELECT endpoint, p256dh, auth
     FROM push_subscriptions
     WHERE user_id = ${userId}
   `
 
-  if (result.rows.length === 0) return
+  const body =
+    status === 'completed'
+      ? `${agentName} completed a scheduled run${cronExpression ? ` (${cronExpression})` : ''}`
+      : `${agentName} ran and ${status === 'failed' ? 'failed' : 'finished'}${cronExpression ? ` (${cronExpression})` : ''}`
 
   const payload = JSON.stringify({
-    title,
-    body: summary,
+    title: `Agent ${status === 'completed' ? 'completed' : 'ran'}`,
+    body,
     icon: '/icon-192.png',
     badge: '/badge-72.png',
     tag: `proactive-${runId}`,
-    data: { runId, agentId: params.agentId },
-    actions: [
-      { action: 'view', title: 'View' },
-    ],
+    data: { agentId, runId },
   })
 
   for (const row of result.rows) {
@@ -314,4 +225,38 @@ export async function sendProactiveRunPush(params: {
       }
     }
   }
+}
+
+/**
+ * Save a push subscription for a user (called from /api/push/subscribe).
+ */
+export async function savePushSubscription(params: {
+  userId: string
+  endpoint: string
+  p256dh: string
+  auth: string
+}): Promise<void> {
+  if (!WEB_PUSH_ENABLED) {
+    throw new Error('Web push is not configured')
+  }
+
+  const { userId, endpoint, p256dh, auth } = params
+  await sql`
+    INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
+    VALUES (gen_random_uuid(), ${userId}, ${endpoint}, ${p256dh}, ${auth}, NOW())
+    ON CONFLICT (endpoint) DO UPDATE SET
+      p256dh = EXCLUDED.p256dh,
+      auth = EXCLUDED.auth
+  `
+}
+
+/**
+ * Delete a push subscription (called when user opts out).
+ */
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`
+}
+
+export async function deletePushSubscriptionForUser(userId: string, endpoint: string): Promise<void> {
+  await sql`DELETE FROM push_subscriptions WHERE user_id = ${userId} AND endpoint = ${endpoint}`
 }
